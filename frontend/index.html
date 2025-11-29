@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>VesselTracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      margin: 0;
+      background: #f2f2f2;
+    }
+    h1, h2, h3 {
+      margin-top: 0;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      background: #007bff;
+      color: #fff;
+      white-space: nowrap;
+    }
+    button.delete {
+      background: #e55353;
+    }
+    button:active {
+      opacity: 0.85;
+    }
+    .status {
+      font-size: 13px;
+      color: #555;
+      margin-top: 6px;
+    }
+    .vessel-name-preview {
+      font-size: 13px;
+      color: #777;
+      margin-top: 4px;
+    }
+    .vessel-header {
+      font-weight: bold;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+    .vessel-meta {
+      font-size: 13px;
+      color: #555;
+    }
+    .vessel-footer {
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 11px;
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 999px;
+      margin-right: 4px;
+    }
+    @media (max-width: 480px) {
+      body {
+        padding: 10px;
+      }
+      button {
+        flex: 0 0 100%;
+        text-align: center;
+      }
+      .row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h2>VesselTracker (GitHub + Vesselfinder)</h2>
+
+  <div class="card">
+    <h3>Add vessel by IMO</h3>
+    <div class="row">
+      <input id="imoInput" type="text" placeholder="Enter IMO (e.g. 7325461)" />
+      <button onclick="addIMO()">ADD</button>
+    </div>
+    <div id="namePreview" class="vessel-name-preview"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h3>Tracked vessels</h3>
+    <div id="vesselsContainer" class="vessels"></div>
+  </div>
+
+<script>
+// TODO: change this with your real username and branch
+const USERNAME = "YOUR_GITHUB_USERNAME";
+const REPO = "VesselTracker";
+const BRANCH = "main";
+
+const WORKFLOW_ADD = "add_imo.yml";
+const WORKFLOW_REMOVE = "remove_imo.yml";
+
+const statusEl = document.getElementById("status");
+const namePreviewEl = document.getElementById("namePreview");
+const vesselsContainer = document.getElementById("vesselsContainer");
+const imoInput = document.getElementById("imoInput");
+
+imoInput.addEventListener("input", () => {
+  const imo = imoInput.value.trim();
+  if (!imo) {
+    namePreviewEl.textContent = "";
+    return;
+  }
+  namePreviewEl.textContent = "IMO " + imo;
+});
+
+async function addIMO() {
+  const imo = imoInput.value.trim();
+  if (!imo) {
+    statusEl.textContent = "Enter an IMO first.";
+    return;
+  }
+
+  statusEl.textContent = "Sending add request to GitHub Actions...";
+
+  try {
+    const url = `https://api.github.com/repos/${USERNAME}/${REPO}/actions/workflows/${WORKFLOW_ADD}/dispatches`;
+    const body = {
+      ref: BRANCH,
+      inputs: { imo }
+    };
+
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/vnd.github+json"
+        // For private repos, you must add:
+        // "Authorization": "Bearer YOUR_GITHUB_TOKEN"
+      },
+      body: JSON.stringify(body)
+    });
+
+    statusEl.textContent = "Add workflow triggered. Data will refresh after GitHub runs.";
+    imoInput.value = "";
+    namePreviewEl.textContent = "";
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "Error calling GitHub API.";
+  }
+}
+
+async function removeIMO(imo) {
+  statusEl.textContent = "Sending remove request for IMO " + imo + "...";
+
+  try {
+    const url = `https://api.github.com/repos/${USERNAME}/${REPO}/actions/workflows/${WORKFLOW_REMOVE}/dispatches`;
+    const body = {
+      ref: BRANCH,
+      inputs: { imo }
+    };
+
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Accept": "application/vnd.github+json"
+        // For private repos, you must add:
+        // "Authorization": "Bearer YOUR_GITHUB_TOKEN"
+      },
+      body: JSON.stringify(body)
+    });
+
+    statusEl.textContent = "Remove workflow triggered. Data will refresh after GitHub runs.";
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "Error calling GitHub API.";
+  }
+}
+
+async function loadData() {
+  vesselsContainer.textContent = "Loading from GitHub raw...";
+
+  try {
+    const trackedUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/data/tracked_imos.json`;
+    const vesselsUrl = `https://raw.githubusercontent.com/${USERNAME}/${REPO}/${BRANCH}/data/vessels_data.json`;
+
+    const [trackedRes, vesselsRes] = await Promise.all([
+      fetch(trackedUrl),
+      fetch(vesselsUrl)
+    ]);
+
+    if (!trackedRes.ok || !vesselsRes.ok) {
+      vesselsContainer.textContent = "Cannot load data (check repo visibility or paths).";
+      return;
+    }
+
+    const trackedJson = await trackedRes.json();
+    const vesselsJson = await vesselsRes.json();
+
+    const trackedImos = trackedJson.tracked_imos || [];
+    const vessels = vesselsJson.vessels || [];
+
+    renderVessels(trackedImos, vessels);
+  } catch (e) {
+    console.error(e);
+    vesselsContainer.textContent = "Error loading data.";
+  }
+}
+
+function renderVessels(trackedImos, vessels) {
+  if (!trackedImos.length) {
+    vesselsContainer.textContent = "No vessels tracked yet.";
+    return;
+  }
+
+  vesselsContainer.innerHTML = "";
+
+  trackedImos.forEach(imo => {
+    const v = vessels.find(x => x.imo === imo) || {};
+    const name = v.name || "(unknown name)";
+    const posArea = v.position_area || "";
+    const lastAge = v.last_pos_age || "";
+    const dest = v.destination_port_name || "";
+    const lastPort = v.last_port_name || "";
+    const flag = v.flag || "";
+    const sog = v.sog_kn != null ? v.sog_kn + " kn" : "";
+    const draught = v.current_draught_m != null ? v.current_draught_m + " m" : "";
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+      <div class="vessel-header">${name}</div>
+      <div class="vessel-meta">IMO ${imo}${flag ? " · " + flag : ""}</div>
+      <div class="vessel-meta">
+        ${posArea ? "Area: " + posArea + " · " : ""}
+        ${lastAge ? "Last AIS: " + lastAge : ""}
+      </div>
+      <div class="vessel-meta">
+        ${dest ? "Dest: " + dest : ""}${lastPort ? " · From: " + lastPort : ""}
+      </div>
+      <div class="vessel-footer">
+        <div>
+          ${sog ? `<span class="tag">Speed ${sog}</span>` : ""}
+          ${draught ? `<span class="tag">Draft ${draught}</span>` : ""}
+        </div>
+        <button class="delete" onclick="removeIMO('${imo}')">Delete</button>
+      </div>
+    `;
+
+    vesselsContainer.appendChild(card);
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>
