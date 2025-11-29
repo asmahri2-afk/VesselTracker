@@ -1,0 +1,47 @@
+name: Remove IMO
+
+on:
+  workflow_dispatch:
+    inputs:
+      imo:
+        description: "IMO number to remove"
+        required: true
+        type: string
+
+jobs:
+  remove_imo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove IMO from list
+        env:
+          IMO: ${{ github.event.inputs.imo }}
+        run: |
+          python3 - << 'EOF'
+import json, os
+
+FILE = "data/tracked_imos.json"
+imo_to_remove = os.environ.get("IMO")
+
+with open(FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+lst = data.get("tracked_imos", [])
+lst = [x for x in lst if x != imo_to_remove]
+
+with open(FILE, "w", encoding="utf-8") as f:
+    json.dump({"tracked_imos": lst}, f, indent=2)
+EOF
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tracked_imos.json
+          git commit -m "Remove IMO ${{ github.event.inputs.imo }}" || echo "No changes to commit"
+          git push || echo "Nothing to push"

@@ -1,1 +1,40 @@
+name: Update vessels data
 
+on:
+  push:
+    paths:
+      - "data/tracked_imos.json"
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        run: python src/scrape_vesselfinder.py
+
+      - name: Commit updated data
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/vessels_data.json
+            git commit -m "Updated vessel data"
+            git push || echo "Nothing to push"
+          else
+            echo "No changes"

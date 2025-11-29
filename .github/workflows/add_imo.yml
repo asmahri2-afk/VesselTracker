@@ -1,0 +1,48 @@
+name: Add IMO
+
+on:
+  workflow_dispatch:
+    inputs:
+      imo:
+        description: "IMO number to add"
+        required: true
+        type: string
+
+jobs:
+  add_imo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add IMO to list
+        env:
+          IMO: ${{ github.event.inputs.imo }}
+        run: |
+          python3 - << 'EOF'
+import json, os
+
+FILE = "data/tracked_imos.json"
+imo_to_add = os.environ.get("IMO")
+
+with open(FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+lst = set(data.get("tracked_imos", []))
+if imo_to_add:
+    lst.add(imo_to_add)
+
+with open(FILE, "w", encoding="utf-8") as f:
+    json.dump({"tracked_imos": sorted(lst)}, f, indent=2)
+EOF
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/tracked_imos.json
+          git commit -m "Add IMO ${{ github.event.inputs.imo }}" || echo "No changes to commit"
+          git push || echo "Nothing to push"
