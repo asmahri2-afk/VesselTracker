@@ -39,10 +39,22 @@ with open(FILE, "w", encoding="utf-8") as f:
     json.dump({"tracked_imos": sorted(lst)}, f, indent=2)
 EOF
 
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/tracked_imos.json
-          git commit -m "Add IMO ${{ github.event.inputs.imo }}" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+     - name: Commit & push changes
+  run: |
+    git config user.name "github-actions[bot]"
+    git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    echo "Git status before commit:"
+    git status
+
+    # Only stage tracked_imos.json – the other file name was wrong
+    git add data/tracked_imos.json || true
+
+    # Commit only if there are actual changes
+    if [[ -n "$(git status --porcelain)" ]]; then
+      git commit -m "${{ github.event.inputs.action_title || 'Update tracked IMOs from HTML' }}"
+      git push origin main
+      echo "Changes committed and pushed."
+    else
+      echo "No changes to commit."
+    fi
