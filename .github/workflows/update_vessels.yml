@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+      CALLMEBOT_API_KEY: ${{ secrets.CALLMEBOT_API_KEY }}
 
     steps:
       - name: Checkout repository
@@ -38,7 +41,7 @@ jobs:
           echo "Git status before commit:"
           git status
           # Only commit if vessels_data.json changed
-          if [[ -n "$(git status --porcelain data/vessels_data.json)" ]]; then
+          if [[ -n "$(git.status --porcelain data/vessels_data.json)" ]]; then
             git add data/vessels_data.json
             git commit -m "Update vessels data #${{ github.run_number }}"
             git push origin main
