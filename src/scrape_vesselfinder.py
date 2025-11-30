@@ -1,248 +1,219 @@
 import json
-import re
-import html
-from datetime import datetime
-from pathlib import Path
-
+import math
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime, timezone
+from pathlib import Path
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
+VESSELS_STATE_PATH = Path("data/vessels_data.json")
+PORTS_PATH = Path("data/ports.json")
+
+# Your 4 ports (NM radius can be changed)
+DEFAULT_PORTS = {
+    "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
+    "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
+    "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
+    "DAKHLA": {"lat": 23.7048, "lon": -15.9336}
+}
+
+# CallMeBot WhatsApp variables (replace with env for security)
+CALLMEBOT_PHONE = "212663401022"        # "2126xxxxxxxx"
+CALLMEBOT_API_KEY = "9206809"      # Key from CallMeBot website
+
+# AIS freshness threshold
+FRESH_SIGNAL_MINUTES = 30
+APPROACH_RADIUS_NM = 50
 
 
-BASE_URL = "https://www.vesselfinder.com/vessels/details/"
-ROOT = Path(__file__).resolve().parents[1]
-TRACKED_IMOS_FILE = ROOT / "data" / "tracked_imos.json"
-OUTPUT_FILE = ROOT / "data" / "vessels_data.json"
+# ============================================================
+# HELPERS
+# ============================================================
+
+def load_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return default
 
 
-def load_tracked_imos():
-    with open(TRACKED_IMOS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("tracked_imos", [])
+def save_json(path: Path, data):
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
 
 
-def fetch_html_for_imo(imo: str) -> str:
-    url = f"{BASE_URL}{imo}"
-    resp = requests.get(url, timeout=20)
-    resp.raise_for_status()
-    return resp.text
+# ============================================================
+# LOAD TRACKED IMOs (supports list format)
+# ============================================================
+
+def load_tracked_imos() -> list[str]:
+    data = load_json(TRACKED_IMOS_PATH, [])
+
+    if isinstance(data, list):
+        return [str(x).strip() for x in data if str(x).strip()]
+
+    if isinstance(data, dict) and "tracked_imos" in data:
+        lst = data.get("tracked_imos", [])
+        if isinstance(lst, list):
+            return [str(x).strip() for x in lst if str(x).strip()]
+
+    return []
 
 
-def extract_djson(html_text: str) -> dict:
-    m = re.search(r'<div id="djson"[^>]*data-json=\'(.*?)\'', html_text, re.DOTALL)
-    if not m:
+# ============================================================
+# HAVERSINE FOR NM DISTANCE
+# ============================================================
+
+def distance_nm(lat1, lon1, lat2, lon2):
+    R = 3440.065  # nautical miles
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+# ============================================================
+# WHATSAPP ALERT
+# ============================================================
+
+def send_whatsapp_message(msg: str):
+    url = (
+        f"https://api.callmebot.com/whatsapp.php"
+        f"?phone={CALLMEBOT_PHONE}&text={requests.utils.quote(msg)}&apikey={CALLMEBOT_API_KEY}"
+    )
+    try:
+        requests.get(url, timeout=10)
+        print(f"[ALERT SENT] {msg}")
+    except:
+        print("[ERROR] WhatsApp alert failed.")
+
+
+# ============================================================
+# SCRAPER FOR VESSELFINDER
+# ============================================================
+
+def scrape_vesselfinder(imo: str) -> dict:
+    url = f"https://www.vesselfinder.com/vessels/details/{imo}"
+    print("Fetching:", url)
+
+    r = requests.get(url, timeout=20)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # Vessel name
+    title = soup.find("h1")
+    name = title.text.strip() if title else "UNKNOWN"
+
+    # JSON in the HTML
+    json_blob = soup.find("script", {"type": "application/ld+json"})
+    if not json_blob:
         return {}
-    raw = html.unescape(m.group(1))
-    return json.loads(raw)
 
+    try:
+        data = json.loads(json_blob.text)
+    except:
+        return {}
 
-def parse_vessel(html_text: str, imo: str) -> dict:
-    soup = BeautifulSoup(html_text, "html.parser")
+    # Extract core fields
+    lat = float(data.get("latitude")) if data.get("latitude") else None
+    lon = float(data.get("longitude")) if data.get("longitude") else None
+    sog = float(data.get("speed")) if data.get("speed") else 0
+    cog = float(data.get("course")) if data.get("course") else 0
 
-    # NAME
-    name_tag = soup.find("h1", class_="title")
-    name = name_tag.get_text(strip=True) if name_tag else None
+    last_pos_utc = data.get("dateModified")  # e.g. 2025-01-01T12:34:00Z
+    arrival_destination = data.get("arrivalDestination", "")
 
-    # SUMMARY TEXT
-    summary = soup.find("p", class_="text2")
-    position_area = None
-    commercial_type = None
-    flag = None
-    year_built = None
-    age_years_text = None
-
-    if summary:
-        txt = " ".join(summary.get_text(" ", strip=True).split())
-
-        m_area = re.search(r"is at (.+?) reported", txt)
-        if m_area:
-            position_area = m_area.group(1).strip()
-
-        m_type = re.search(r"is a (.+?) built in", txt)
-        if m_type:
-            commercial_type = m_type.group(1).strip()
-
-        m_flag = re.search(r"flag of (.+?)\.", txt)
-        if m_flag:
-            flag = m_flag.group(1).strip()
-
-        m_year = re.search(r"built in (\d{4})", txt)
-        if m_year:
-            year_built = int(m_year.group(1))
-            age_years_text = f"{datetime.utcnow().year - year_built} years old"
-
-    # TABLES
-    mmsi = None
-    callsign = None
-    ais_type_text = None
-    current_draught_m = None
-    last_pos_age = None
-    last_pos_time_utc = None
-
-    tables = soup.find_all("table", class_="aparams")
-    for tbl in tables:
-        for tr in tbl.find_all("tr"):
-            tds = tr.find_all("td")
-            if len(tds) != 2:
-                continue
-
-            label = tds[0].get_text(strip=True)
-            value = " ".join(tds[1].get_text(" ", strip=True).split())
-
-            if label == "IMO / MMSI":
-                parts = [p.strip() for p in value.split("/") if p.strip()]
-                if len(parts) == 2:
-                    mmsi = parts[1]
-
-            elif label == "Callsign":
-                callsign = value or None
-
-            elif label == "AIS Type":
-                ais_type_text = value or None
-
-            elif label == "Current draught":
-                m = re.search(r"([\d\.]+)", value)
-                if m:
-                    current_draught_m = float(m.group(1))
-
-            elif label == "Position received":
-                span_age = tds[1].find("span", class_="red")
-                if span_age:
-                    last_pos_age = span_age.get_text(strip=True)
-
-                svg = tds[1].find("svg")
-                if svg and svg.has_attr("data-title"):
-                    last_pos_time_utc = svg["data-title"]
-
-    # VOYAGE DATA
-    destination_port_name = None
-    destination_port_code = None
-    destination_flag = None
-    ata_text = None
-    arrival_status = None
-
-    voyage_header = soup.find("h2", id="lim")
-    if voyage_header:
-        block = voyage_header.find_parent("div", class_="s0")
-
-        if block:
-            dest_flag_div = block.find("div", class_="flag-icon")
-            if dest_flag_div and dest_flag_div.has_attr("title"):
-                destination_flag = dest_flag_div["title"]
-
-            dest_link = block.find("a", class_="_npNa")
-            if dest_link:
-                destination_port_name = dest_link.get_text(strip=True)
-                href = dest_link.get("href", "")
-                m = re.search(r"/ports/([^\"/?]+)", href)
-                if m:
-                    destination_port_code = m.group(1)
-
-            value_div = block.find("div", class_="_value")
-            if value_div:
-                span1 = value_div.find("span", class_="_mcol12")
-                if span1:
-                    ata_text = span1.get_text(strip=True).replace("ATA: ", "")
-
-                span_status = value_div.find("span", class_="_arrLb")
-                if span_status:
-                    arrival_status = span_status.get_text(strip=True)
-
-    # LAST PORT
-    last_port_name = None
-    last_port_code = None
-    last_port_atd_utc = None
-    last_port_atd_age = None
-
-    if voyage_header:
-        block = voyage_header.find_parent("div", class_="s0")
-        last_block = block.find_next("div", class_="vi__r1") if block else None
-        if last_block:
-            link = last_block.find("a", class_="_npNa")
-            if link:
-                last_port_name = link.get_text(strip=True)
-                href = link.get("href", "")
-                m = re.search(r"/ports/([^\"/?]+)", href)
-                if m:
-                    last_port_code = m.group(1)
-
-            value_div = last_block.find("div", class_="_value")
-            if value_div:
-                txt = " ".join(value_div.get_text(" ", strip=True).split())
-
-                m = re.search(r"ATD:\s+([^()]+)", txt)
-                if m:
-                    last_port_atd_utc = m.group(1).strip()
-
-                m = re.search(r"\((.+?)\)", txt)
-                if m:
-                    last_port_atd_age = m.group(1).strip()
-
-    # DJSON
-    djson = extract_djson(html_text)
-    lat = djson.get("ship_lat")
-    lon = djson.get("ship_lon")
-    sog_kn = djson.get("ship_sog")
-    cog_deg = djson.get("ship_cog")
-    sar = djson.get("sar", False)
-
-    vessel = {
-        "name": name,
+    return {
         "imo": imo,
-        "mmsi": mmsi,
-        "callsign": callsign,
-        "commercial_type": commercial_type,
-        "ais_type_text": ais_type_text,
-        "flag": flag,
-        "year_built": year_built,
-        "age_years_text": age_years_text,
-
-        "position_area": position_area,
+        "name": name,
         "lat": lat,
         "lon": lon,
-        "sog_kn": sog_kn,
-        "cog_deg": cog_deg,
-        "nav_status": None,
-        "last_pos_age": last_pos_age,
-        "last_pos_time_utc": last_pos_time_utc,
-        "sar": sar,
-
-        "current_draught_m": current_draught_m,
-
-        "destination_port_name": destination_port_name,
-        "destination_port_code": destination_port_code,
-        "destination_flag": destination_flag,
-        "ata_text": ata_text,
-        "arrival_status": arrival_status,
-
-        "last_port_name": last_port_name,
-        "last_port_code": last_port_code,
-        "last_port_atd_utc": last_port_atd_utc,
-        "last_port_atd_age": last_port_atd_age
+        "sog": sog,
+        "cog": cog,
+        "last_pos_utc": last_pos_utc,
+        "destination": arrival_destination
     }
 
-    return vessel
 
+# ============================================================
+# ALERT LOGIC
+# ============================================================
+
+def detect_alerts(v: dict, ports: dict):
+    alerts = []
+    name = v.get("name", "UNKNOWN")
+    lat, lon = v.get("lat"), v.get("lon")
+    last_utc = v.get("last_pos_utc")
+
+    # ---- 1. Signal freshness alert ----
+    if last_utc:
+        try:
+            dt = datetime.fromisoformat(last_utc.replace("Z", "+00:00"))
+            age_mins = (datetime.now(timezone.utc) - dt).total_seconds() / 60
+        except:
+            age_mins = None
+    else:
+        age_mins = None
+
+    if age_mins is not None and age_mins <= FRESH_SIGNAL_MINUTES:
+        alerts.append(f"🛰️ Fresh AIS: {name} updated {age_mins:.0f} min ago")
+
+    # ---- 2. Port distance alerts ----
+    if lat and lon:
+        for port, coords in ports.items():
+            dist = distance_nm(lat, lon, coords["lat"], coords["lon"])
+            if dist <= APPROACH_RADIUS_NM:
+                alerts.append(f"⚓ {name} is {dist:.1f} NM from {port}")
+
+    return alerts
+
+
+# ============================================================
+# MAIN
+# ============================================================
 
 def main():
+    # Load tracked IMOs
     imos = load_tracked_imos()
-    results = []
+    print("Tracked IMOs:", imos)
+
+    # Load ports list
+    ports = load_json(PORTS_PATH, DEFAULT_PORTS)
+
+    # Previous states
+    old_data = load_json(VESSELS_STATE_PATH, {})
+
+    new_data = {}
 
     for imo in imos:
-        try:
-            print(f"Fetching IMO {imo}")
-            html_text = fetch_html_for_imo(imo)
-            vessel_data = parse_vessel(html_text, imo)
-            results.append(vessel_data)
+        v = scrape_vesselfinder(imo)
+        if not v:
+            print(f"[WARN] Could not scrape IMO {imo}")
+            continue
 
-        except Exception as e:
-            print(f"Error for IMO {imo}: {e}")
+        new_data[imo] = v
 
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump({"vessels": results}, f, ensure_ascii=False, indent=2)
+        # ---- ALERT PROCESSING ----
+        alerts = detect_alerts(v, ports)
+        for a in alerts:
+            print("[ALERT]", a)
+            send_whatsapp_message(a)
 
-    print("Done:", OUTPUT_FILE)
+    # Save updated vessels
+    save_json(VESSELS_STATE_PATH, new_data)
+    print("Saved vessels_data.json ✔")
 
+
+# ============================================================
 
 if __name__ == "__main__":
     main()
