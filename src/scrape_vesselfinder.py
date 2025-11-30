@@ -1,37 +1,38 @@
 import json
 import math
 import os
+import requests
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-
 # ============================================================
-# PATHS / CONFIG
+# CONFIG
 # ============================================================
 
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
 
-DEFAULT_PORTS = {
-    "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
-    "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
-    "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
-    "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
-}
+# CallMeBot (env secrets in GitHub)
+CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
+CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY")
+CALLMEBOT_ENABLED = bool(CALLMEBOT_PHONE and CALLMEBOT_APIKEY)
 
-CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE") or "212663401022"
-CALLMEBOT_API_KEY = os.getenv("CALLMEBOT_API_KEY") or "5910165"
+# Your Render API
+RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
-FRESH_SIGNAL_MINUTES = 30
+# AIS age threshold in minutes
+MAX_AIS_MINUTES = 30
+
+# Distance threshold (NM) to consider “arrived” at destination
+ARRIVAL_RADIUS_NM = 3.0
+
+# Min movement (NM) to consider course/pos “changed”
 MIN_MOVE_NM = 2.0
-ARRIVAL_RADIUS_NM = 1.0
-ARRIVAL_MAX_SOG = 1.0
 
 
 # ============================================================
-# BASIC HELPERS
+# UTIL
 # ============================================================
 
 def load_json(path: Path, default):
@@ -47,102 +48,159 @@ def load_json(path: Path, default):
 def save_json(path: Path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def load_tracked_imos() -> list[str]:
-    data = load_json(TRACKED_IMOS_PATH, [])
+def haversine_nm(lat1, lon1, lat2, lon2) -> float:
+    """
+    Great-circle distance in nautical miles.
+    """
+    R_km = 6371.0
+    lat1_r = math.radians(lat1)
+    lon1_r = math.radians(lon1)
+    lat2_r = math.radians(lat2)
+    lon2_r = math.radians(lon2)
 
-    if isinstance(data, list):
-        return [str(x).strip() for x in data if str(x).strip()]
+    dlat = lat2_r - lat1_r
+    dlon = lon2_r - lon1_r
 
-    if isinstance(data, dict) and "tracked_imos" in data:
-        lst = data.get("tracked_imos", [])
-        if isinstance(lst, list):
-            return [str(x).strip() for x in lst if str(x).strip()]
-
-    return []
-
-
-def distance_nm(lat1, lon1, lat2, lon2) -> float:
-    R = 3440.065  # nautical miles
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(a))
-
-
-def send_whatsapp_message(msg: str):
-    if not CALLMEBOT_PHONE or not CALLMEBOT_API_KEY:
-        print("[WARN] CallMeBot not configured:")
-        print(msg)
-        return
-
-    url = (
-        "https://api.callmebot.com/whatsapp.php"
-        f"?phone={CALLMEBOT_PHONE}&text={requests.utils.quote(msg)}&apikey={CALLMEBOT_API_KEY}"
-    )
-
-    try:
-        r = requests.get(url, timeout=10)
-        print(f"[INFO] WhatsApp status: {r.status_code}")
-    except Exception as e:
-        print("[ERROR] WhatsApp alert failed:", e)
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+    dist_km = R_km * c
+    return dist_km * 0.539957  # km → NM
 
 
 # ============================================================
-# PORT / DESTINATION HELPERS
+# PORTS
 # ============================================================
+
+def load_ports() -> dict:
+    """
+    ports.json is expected to be like:
+    {
+      "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
+      ...
+    }
+    """
+    ports = load_json(PORTS_PATH, {})
+    if ports:
+        return ports
+
+    # Fallback if ports.json is missing
+    return {
+        "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
+        "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
+        "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
+        "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
+    }
+
 
 def nearest_port(lat: float, lon: float, ports: dict):
     best_name = None
-    best_dist = None
+    best_nm = None
     for name, coords in ports.items():
-        d = distance_nm(lat, lon, coords["lat"], coords["lon"])
-        if best_dist is None or d < best_dist:
-            best_dist = d
+        d_nm = haversine_nm(lat, lon, coords["lat"], coords["lon"])
+        if best_nm is None or d_nm < best_nm:
+            best_nm = d_nm
             best_name = name
-    return best_name, best_dist
+    return best_name, best_nm
 
 
-def match_destination_port(dest_text: str, ports: dict):
-    if not dest_text:
+# ============================================================
+# TIME / AIS AGE
+# ============================================================
+
+def parse_ais_time(s: str):
+    """
+    Example string from VF: "Nov 30, 2025 17:07 UTC"
+    Returns aware datetime in UTC, or None.
+    """
+    if not s:
         return None
-    up = dest_text.upper()
-    for name in ports.keys():
-        if name in up:
-            return name
-    return None
+    s = s.strip()
+    try:
+        dt = datetime.strptime(s, "%b %d, %Y %H:%M %Z")
+        # Assume UTC if no tzinfo
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def age_minutes(last_ts: str) -> float | None:
+    dt = parse_ais_time(last_ts)
+    if not dt:
+        return None
+    now = datetime.now(timezone.utc)
+    delta = now - dt
+    return delta.total_seconds() / 60.0
 
 
 # ============================================================
-# TEMP SCRAPER STUB (for testing)
+# CALLMEBOT
 # ============================================================
 
-def scrape_vesselfinder(imo: str) -> dict:
-    url = f"https://vessel-api-s85s.onrender.com/vessel-full/{imo}"
-    print("Fetching from API:", url)
+def send_whatsapp_message(text: str):
+    if not CALLMEBOT_ENABLED:
+        print("[INFO] WhatsApp disabled or not configured.")
+        return
+
+    # CallMeBot expects URL-encoded text
+    url = (
+        f"https://api.callmebot.com/whatsapp.php?"
+        f"phone={CALLMEBOT_PHONE}"
+        f"&apikey={CALLMEBOT_APIKEY}"
+        f"&text={requests.utils.quote(text)}"
+    )
 
     try:
         r = requests.get(url, timeout=20)
+        print(f"[INFO] WhatsApp status: {r.status_code}")
+    except Exception as e:
+        print(f"[ERROR] WhatsApp send failed: {e}")
+
+
+# ============================================================
+# SCRAPER – USE YOUR RENDER API
+# ============================================================
+
+def fetch_from_render_api(imo: str) -> dict:
+    """
+    Calls your Render API /vessel-full/{imo} and normalises the result.
+    Expected JSON (fields may be None):
+    {
+      "found": true,
+      "imo": "6417499",
+      "name": "NAVE SANTA MARIA",
+      "lat": 29,
+      "lon": -14,
+      "sog": 0,
+      "cog": 21,
+      "last_pos_utc": "Nov 30, 2025 17:07 UTC",
+      "destination": "Tan Tan, Morocco"
+    }
+    """
+    url = f"{RENDER_BASE}/vessel-full/{imo}"
+    print("Fetching from API:", url)
+
+    try:
+        r = requests.get(url, timeout=25)
         r.raise_for_status()
     except Exception as e:
-        print(f"[ERROR] API request failed for {imo}: {e}")
+        print(f"[ERROR] API request failed for IMO {imo}: {e}")
         return {}
 
     data = r.json()
 
     if data.get("found") is False:
-        print(f"[WARN] API says vessel not found for IMO {imo}")
+        print(f"[WARN] API: vessel not found for IMO {imo}")
         return {}
 
     lat = data.get("lat")
     lon = data.get("lon")
     if lat is None or lon is None:
-        print(f"[WARN] Missing lat/lon from API for IMO {imo}")
+        print(f"[WARN] API: missing lat/lon for IMO {imo}")
         return {}
 
     return {
@@ -157,138 +215,125 @@ def scrape_vesselfinder(imo: str) -> dict:
     }
 
 
-
-
 # ============================================================
-# ALERT + STATE LOGIC
+# ALERT LOGIC
 # ============================================================
 
-def compute_age_minutes(last_utc: str | None) -> float | None:
-    if not last_utc:
-        return None
-    try:
-        dt = datetime.fromisoformat(last_utc.replace("Z", "+00:00"))
-        return (datetime.now(timezone.utc) - dt).total_seconds() / 60
-    except Exception:
-        return None
+def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
+    """
+    Returns (alert_message: str | None, new_state: dict).
+    - Skips if AIS is older than MAX_AIS_MINUTES.
+    - Marks vessel as 'done' when arrived at destination and stopped.
+    - Sends alert on:
+        * first time we see the vessel
+        * significant movement (>= MIN_MOVE_NM)
+        * destination change
+        * arrival event
+    """
+    imo = v["imo"]
+    name = v.get("name", f"IMO {imo}")
+    lat = v["lat"]
+    lon = v["lon"]
+    sog = v["sog"]
+    cog = v["cog"]
+    last_pos_utc = v.get("last_pos_utc")
+    destination = v.get("destination", "")
 
+    # AIS age filter
+    ais_age_min = age_minutes(last_pos_utc) if last_pos_utc else None
+    if ais_age_min is not None and ais_age_min > MAX_AIS_MINUTES:
+        print(f"[INFO] IMO {imo}: AIS {ais_age_min:.1f} min old, skipping.")
+        # still update state but no alert
+        pass
 
-def detect_changes_and_message(v: dict, ports: dict, previous: dict):
-    name = v.get("name", "UNKNOWN")
-    imo = v.get("imo")
-    lat = v.get("lat")
-    lon = v.get("lon")
-    sog = v.get("sog") or 0.0
-    cog = v.get("cog") or 0.0
-    dest_text = v.get("destination") or ""
-    last_utc = v.get("last_pos_utc")
-
-    if lat is None or lon is None:
-        return previous, None
-
-    age_mins = compute_age_minutes(last_utc)
-    if age_mins is None or age_mins > FRESH_SIGNAL_MINUTES:
-        new_state = {
-            **previous,
-            "name": name,
-            "imo": imo,
-            "lat": lat,
-            "lon": lon,
-            "sog": sog,
-            "cog": cog,
-            "destination_text": dest_text,
-            "last_pos_utc": last_utc,
-            "age_mins": age_mins,
-        }
-        return new_state, None
-
-    near_port, near_dist = nearest_port(lat, lon, ports)
-
-    dest_port = match_destination_port(dest_text, ports)
-    if dest_port:
-        dest_dist = distance_nm(lat, lon, ports[dest_port]["lat"], ports[dest_port]["lon"])
-    else:
-        dest_dist = None
-
-    arrived = (
-        dest_port is not None
-        and dest_dist is not None
-        and dest_dist <= ARRIVAL_RADIUS_NM
-        and sog <= ARRIVAL_MAX_SOG
-    )
-
-    if previous.get("done") and arrived:
-        new_state = {
-            **previous,
-            "name": name,
-            "imo": imo,
-            "lat": lat,
-            "lon": lon,
-            "sog": sog,
-            "cog": cog,
-            "destination_text": dest_text,
-            "last_pos_utc": last_utc,
-            "age_mins": age_mins,
-            "nearest_port": near_port,
-            "nearest_port_nm": near_dist,
-            "dest_port": dest_port,
-            "dest_dist_nm": dest_dist,
-            "done": True,
-        }
-        return new_state, None
-
-    moved = False
-    if "lat" in previous and "lon" in previous:
-        prev_move = distance_nm(previous["lat"], previous["lon"], lat, lon)
-        if prev_move >= MIN_MOVE_NM:
-            moved = True
-    else:
-        moved = True
-
-    dest_dist_changed = False
-    if dest_dist is not None:
-        prev_dest_dist = previous.get("dest_dist_nm")
-        if prev_dest_dist is None or abs(dest_dist - prev_dest_dist) >= MIN_MOVE_NM:
-            dest_dist_changed = True
-
-    near_port_changed = near_port != previous.get("nearest_port")
-    arrival_changed = arrived and not previous.get("done")
-
-    should_alert = moved or dest_dist_changed or near_port_changed or arrival_changed
-
-    msg = None
-    if should_alert:
-        lines = [
-            f"{name} (IMO {imo})",
-            f"AIS: {age_mins:.0f} min ago | SOG: {sog:.1f} kn | COG: {cog:.0f}°",
-            f"POS: {lat:.4f}, {lon:.4f}",
-        ]
-        if near_port and near_dist is not None:
-            lines.append(f"Nearest port: {near_port} (~{near_dist:.1f} NM)")
-        if dest_port and dest_dist is not None:
-            lines.append(f"Destination: {dest_port} (~{dest_dist:.1f} NM to go)")
-        if arrival_changed:
-            lines.append(">>> ARRIVED / MOORED at destination — alerts stopped.")
-        msg = "\n".join(lines)
+    # Nearest port
+    nearest_name, nearest_nm = nearest_port(lat, lon, ports)
 
     new_state = {
-        "name": name,
         "imo": imo,
+        "name": name,
         "lat": lat,
         "lon": lon,
         "sog": sog,
         "cog": cog,
-        "destination_text": dest_text,
-        "last_pos_utc": last_utc,
-        "age_mins": age_mins,
-        "nearest_port": near_port,
-        "nearest_port_nm": near_dist,
-        "dest_port": dest_port,
-        "dest_dist_nm": dest_dist,
-        "done": previous.get("done") or arrived,
+        "last_pos_utc": last_pos_utc,
+        "destination": destination,
+        "nearest_port": nearest_name,
+        "nearest_distance_nm": nearest_nm,
+        "done": False,
     }
 
-    return new_state, msg
+    # Arrival detection
+    arrived = False
+    if nearest_nm is not None and nearest_nm <= ARRIVAL_RADIUS_NM and sog <= 0.5:
+        arrived = True
+        new_state["done"] = True
+
+    # No previous state → first alert
+    if not prev_state:
+        status = "ARRIVED" if arrived else "FIRST TRACK"
+        msg = (
+            f"{status} {name} (IMO {imo}) | "
+            f"AIS: {('?.?' if ais_age_min is None else f'{ais_age_min:.0f} min')} | "
+            f"SOG: {sog:.1f} kn | COG: {cog:.0f}° | "
+            f"POS: {lat:.4f}, {lon:.4f} | "
+            f"Nearest port: {nearest_name} (~{nearest_nm:.1f} NM) | "
+            f"Destination: {destination or 'N/A'}"
+        )
+        return msg, new_state
+
+    # If already done (arrived earlier), do nothing
+    if prev_state.get("done"):
+        # Allow sending ONE final message when it first becomes done
+        if arrived and not prev_state.get("done"):
+            # (This case won't happen: done would be False before.)
+            pass
+        return None, new_state
+
+    # Destination change?
+    dest_changed = (destination or "") != (prev_state.get("destination") or "")
+
+    # Movement?
+    prev_lat = prev_state.get("lat")
+    prev_lon = prev_state.get("lon")
+    move_nm = None
+    moved = False
+    if prev_lat is not None and prev_lon is not None:
+        move_nm = haversine_nm(prev_lat, prev_lon, lat, lon)
+        moved = move_nm >= MIN_MOVE_NM
+
+    # Arrival event (now arrived, before not done)
+    arrival_event = arrived and not prev_state.get("done")
+
+    if not (dest_changed or moved or arrival_event):
+        # Nothing interesting
+        return None, new_state
+
+    # Build alert text
+    parts = []
+    if arrival_event:
+        parts.append("ARRIVED")
+    elif dest_changed:
+        parts.append("DEST-CHG")
+    elif moved:
+        parts.append("MOVED")
+
+    tag = "/".join(parts) if parts else "UPDATE"
+
+    dist_str = f"{nearest_nm:.1f} NM" if nearest_nm is not None else "N/A"
+    age_str = "?.?" if ais_age_min is None else f"{ais_age_min:.0f} min"
+    move_str = "" if move_nm is None else f" | Δ={move_nm:.1f} NM"
+
+    msg = (
+        f"{tag} {name} (IMO {imo}) | "
+        f"AIS: {age_str} | SOG: {sog:.1f} kn | COG: {cog:.0f}° | "
+        f"POS: {lat:.4f}, {lon:.4f} | "
+        f"Nearest port: {nearest_name} (~{dist_str}) | "
+        f"Destination: {destination or 'N/A'}"
+        f"{move_str}"
+    )
+
+    return msg, new_state
 
 
 # ============================================================
@@ -296,37 +341,47 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
 # ============================================================
 
 def main():
-    imos = load_tracked_imos()
-    print("Tracked IMOs:", imos)
+    # Load tracked IMOs
+    tracked = load_json(TRACKED_IMOS_PATH, [])
+    if isinstance(tracked, dict) and "tracked_imos" in tracked:
+        imos = tracked.get("tracked_imos", [])
+    else:
+        imos = tracked
 
+    imos = [str(i).strip() for i in imos if str(i).strip()]
     if not imos:
-        print("No IMOs tracked.")
+        print("No IMOs to track.")
         return
 
-    ports_file = load_json(PORTS_PATH, {})
-    ports = {**DEFAULT_PORTS, **ports_file}
+    print("Tracked IMOs:", imos)
 
-    old_data = load_json(VESSELS_STATE_PATH, {})
-    new_data = {}
+    ports = load_ports()
+    prev_all = load_json(VESSELS_STATE_PATH, {})
+    if not isinstance(prev_all, dict):
+        prev_all = {}
+
+    new_all = {}
 
     for imo in imos:
-        prev_state = old_data.get(imo, {})
-        v = scrape_vesselfinder(imo)
-
+        v = fetch_from_render_api(imo)
         if not v:
             print(f"[WARN] Could not scrape IMO {imo}")
             continue
 
-        vessel_state, message = detect_changes_and_message(v, ports, prev_state)
-        new_data[imo] = vessel_state
+        prev_state = prev_all.get(imo)
+        alert, new_state = build_alert_and_state(v, ports, prev_state)
+        new_all[imo] = new_state
 
-        if message:
-            print("[ALERT]", message.replace("\n", " | "))
-            send_whatsapp_message(message)
+        if alert:
+            print("[ALERT]", alert)
+            send_whatsapp_message(alert)
 
-    save_json(VESSELS_STATE_PATH, new_data)
+    # Save updated state
+    save_json(VESSELS_STATE_PATH, new_all)
     print("Saved vessels_data.json ✔")
 
+
+# ============================================================
 
 if __name__ == "__main__":
     main()
