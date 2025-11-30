@@ -28,19 +28,22 @@ jobs:
       - name: Run scraper
         run: python src/scrape_vesselfinder.py
 
-      - name: Commit & push changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+        - name: Commit & push changes
+    run: |
+      git config user.name "github-actions[bot]"
+      git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          echo "Git status before commit:"
-          git status
+      echo "Git status before commit:"
+      git status
 
-          # Only commit if there are actual changes
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git add data/vessels_state.json data/tracked_imos.json || true
-            git commit -m "Update vessels data #${{ github.run_number }}"
-            git push origin main
-          else
-            echo "No changes to commit"
-          fi
+      # Only commit if there are actual changes
+      if [[ -n "$(git status --porcelain)" ]]; then
+        # <-- IMPORTANT: correct file names here
+        git add data/vessels_data.json data/tracked_imos.json || true
+
+        git commit -m "Update vessels data #${{ github.run_number }}"
+        git push origin main
+      else
+        echo "No changes to commit"
+      fi
+
