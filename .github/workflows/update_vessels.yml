@@ -5,7 +5,7 @@ on:
     paths:
       - "data/tracked_imos.json"
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "*/60 * * * *"   # every 60 minutes
   workflow_dispatch:
 
 jobs:
