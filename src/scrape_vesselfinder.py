@@ -123,11 +123,6 @@ def match_destination_port(dest_text: str, ports: dict):
 # ============================================================
 
 def scrape_vesselfinder(imo: str) -> dict:
-    """
-    PRODUCTION: fetch full AIS from your Render API.
-    Expects /vessel-full/{imo} to return:
-      {found, imo, name, lat, lon, sog, cog, last_pos_utc, destination}
-    """
     url = f"https://vessel-api-s85s.onrender.com/vessel-full/{imo}"
     print("Fetching from API:", url)
 
@@ -140,24 +135,27 @@ def scrape_vesselfinder(imo: str) -> dict:
 
     data = r.json()
 
-    if not data.get("found", True):
+    if data.get("found") is False:
         print(f"[WARN] API says vessel not found for IMO {imo}")
         return {}
 
-    if data.get("lat") is None or data.get("lon") is None:
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if lat is None or lon is None:
         print(f"[WARN] Missing lat/lon from API for IMO {imo}")
         return {}
 
     return {
         "imo": imo,
         "name": data.get("name", f"IMO {imo}"),
-        "lat": float(data["lat"]),
-        "lon": float(data["lon"]),
+        "lat": float(lat),
+        "lon": float(lon),
         "sog": float(data.get("sog") or 0.0),
         "cog": float(data.get("cog") or 0.0),
         "last_pos_utc": data.get("last_pos_utc"),
         "destination": data.get("destination") or "",
     }
+
 
 
 
