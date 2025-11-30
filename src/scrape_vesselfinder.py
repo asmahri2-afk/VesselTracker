@@ -134,34 +134,58 @@ def scrape_vesselfinder(imo: str) -> dict:
     url = f"https://www.vesselfinder.com/vessels/details/{imo}"
     print("Fetching:", url)
 
-    r = requests.get(url, timeout=20)
+    # Pretend to be a real browser so we don't get 403
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.vesselfinder.com/",
+    }
+
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+    except Exception as e:
+        print(f"[ERROR] Request failed for {imo}: {e}")
+        return {}
+
+    if r.status_code == 403:
+        print(f"[WARN] HTTP 403 for {imo} (blocked by Vesselfinder)")
+        return {}
+
     if not r.ok:
         print(f"[WARN] HTTP {r.status_code} for {imo}")
         return {}
 
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Vessel name
+    # ---- Vessel name ----
     title = soup.find("h1")
     name = title.text.strip() if title else "UNKNOWN"
 
-    # JSON in the HTML
+    # ---- JSON-LD block ----
     json_blob = soup.find("script", {"type": "application/ld+json"})
     if not json_blob:
+        print(f"[WARN] No JSON-LD for {imo}")
         return {}
 
     try:
         data = json.loads(json_blob.text)
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] JSON-LD parse error for {imo}: {e}")
         return {}
 
-    # Extract core fields
-    lat = float(data.get("latitude")) if data.get("latitude") else None
-    lon = float(data.get("longitude")) if data.get("longitude") else None
-    sog = float(data.get("speed")) if data.get("speed") else 0.0
-    cog = float(data.get("course")) if data.get("course") else 0.0
+    # Depending on page, data can be a list or dict
+    if isinstance(data, list) and data:
+        data = data[0]
 
-    last_pos_utc = data.get("dateModified")  # e.g. 2025-01-01T12:34:00Z
+    lat = float(data.get("latitude")) if data.get("latitude") is not None else None
+    lon = float(data.get("longitude")) if data.get("longitude") is not None else None
+    sog = float(data.get("speed")) if data.get("speed") is not None else 0.0
+    cog = float(data.get("course")) if data.get("course") is not None else 0.0
+    last_pos_utc = data.get("dateModified")          # e.g. "2025-01-01T12:34:00Z"
     arrival_destination = data.get("arrivalDestination", "")
 
     return {
@@ -174,6 +198,7 @@ def scrape_vesselfinder(imo: str) -> dict:
         "last_pos_utc": last_pos_utc,
         "destination": arrival_destination,
     }
+
 
 
 # ============================================================
