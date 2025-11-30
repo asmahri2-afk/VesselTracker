@@ -14,21 +14,6 @@
     "destination_distance_nm": 143.1053096192101,
     "done": false
   },
-  "9405784": {
-    "imo": "9405784",
-    "name": "MT ZUGA",
-    "lat": 37.0,
-    "lon": -7.0,
-    "sog": 0.2,
-    "cog": 117.2,
-    "last_pos_utc": "Nov 30, 2025 19:15 UTC",
-    "destination": "Huelva Anch., Spain",
-    "nearest_port": "HUELVA ANCH",
-    "nearest_distance_nm": 0.0,
-    "destination_port": "HUELVA",
-    "destination_distance_nm": 11.36835923726557,
-    "done": true
-  },
   "9501655": {
     "imo": "9501655",
     "name": "BBC BELEM",
