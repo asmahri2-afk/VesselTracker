@@ -124,21 +124,12 @@ def match_destination_port(dest_text: str, ports: dict):
 
 def scrape_vesselfinder(imo: str) -> dict:
     """
-    PRODUCTION VERSION
-    Fetches live AIS from your Render API instead of scraping VesselFinder.
-    Must return:
-    {
-      "imo": "...",
-      "name": "...",
-      "lat": <float>,
-      "lon": <float>,
-      "sog": <float>,
-      "cog": <float>,
-      "last_pos_utc": "2025-11-30T16:20:00Z",
-      "destination": "AGADIR"  # or raw text
-    }
+    PRODUCTION: fetch full AIS from your Render API.
+    Expects /vessel-full/{imo} to return:
+      {found, imo, name, lat, lon, sog, cog, last_pos_utc, destination}
     """
-    url = f"https://vessel-api-s85s.onrender.com/vessel/{imo}"
+    url = f"https://vessel-api-s85s.onrender.com/vessel-full/{imo}"
+    print("Fetching from API:", url)
 
     try:
         r = requests.get(url, timeout=20)
@@ -149,20 +140,23 @@ def scrape_vesselfinder(imo: str) -> dict:
 
     data = r.json()
 
-    # Validate minimal required fields
-    if "lat" not in data or "lon" not in data:
-        print(f"[WARN] Missing lat/lon for IMO {imo}")
+    if not data.get("found", True):
+        print(f"[WARN] API says vessel not found for IMO {imo}")
+        return {}
+
+    if data.get("lat") is None or data.get("lon") is None:
+        print(f"[WARN] Missing lat/lon from API for IMO {imo}")
         return {}
 
     return {
         "imo": imo,
         "name": data.get("name", f"IMO {imo}"),
-        "lat": float(data.get("lat")),
-        "lon": float(data.get("lon")),
-        "sog": float(data.get("sog", 0.0)),
-        "cog": float(data.get("cog", 0.0)),
-        "last_pos_utc": data.get("last_pos_utc"),  # must be ISO timestamp
-        "destination": data.get("destination", "")
+        "lat": float(data["lat"]),
+        "lon": float(data["lon"]),
+        "sog": float(data.get("sog") or 0.0),
+        "cog": float(data.get("cog") or 0.0),
+        "last_pos_utc": data.get("last_pos_utc"),
+        "destination": data.get("destination") or "",
     }
 
 
