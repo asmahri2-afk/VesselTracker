@@ -1,18 +1,1 @@
-{
-  "6417499": {
-    "name": "TEST VESSEL 6417499",
-    "imo": "6417499",
-    "lat": 27.2,
-    "lon": -13.4,
-    "sog": 11.5,
-    "cog": 300.0,
-    "destination_text": "DAKHLA",
-    "last_pos_utc": "2025-11-30T16:26:40.032548Z",
-    "age_mins": 3e-07,
-    "nearest_port": "LAAYOUNE",
-    "nearest_port_nm": 10.869240279334933,
-    "dest_port": "DAKHLA",
-    "dest_dist_nm": 250.78728295701168,
-    "done": false
-  }
-}
+{}
