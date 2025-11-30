@@ -222,17 +222,31 @@ def fetch_from_render_api(imo: str) -> dict:
 # ============================================================
 # ALERT LOGIC
 # ============================================================
+def match_destination_port(destination: str, ports: dict):
+    """
+    Try to match destination string (e.g. 'Tan Tan, Morocco')
+    to a port in ports.json. Returns (port_name, coords_dict) or (None, None).
+    """
+    if not destination:
+        return None, None
+
+    dest_up = destination.upper()
+    for port_name, info in ports.items():
+        # ports.json keys are like 'TAN TAN', 'LAAYOUNE', 'ALGECIRAS', 'HUELVA', ...
+        if port_name in dest_up:
+            return port_name, info
+
+    return None, None
+
 
 def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     """
     Returns (alert_message: str | None, new_state: dict).
-    - Skips alert if nothing interesting changed.
-    - Marks vessel as 'done' when arrived at destination and stopped.
-    - Sends alert on:
-        * first time we see the vessel
-        * significant movement (>= MIN_MOVE_NM)
+    - First time seen -> 'First tracking detected' alert
+    - Later:
+        * movement >= MIN_MOVE_NM
         * destination change
-        * arrival event
+        * arrival near port with low speed
     """
 
     imo = v["imo"]
@@ -244,24 +258,29 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     last_pos_utc = v.get("last_pos_utc")
     destination = (v.get("destination") or "").strip()
 
-    # AIS age (for display + optional filtering)
+    # AIS age
     ais_age_min = age_minutes(last_pos_utc) if last_pos_utc else None
     if ais_age_min is not None and ais_age_min > MAX_AIS_MINUTES:
         print(f"[INFO] IMO {imo}: AIS {ais_age_min:.1f} min old (>{MAX_AIS_MINUTES}), still updating state.")
-    # Text for display
-    if ais_age_min is None:
-        ais_age_text = "N/A"
-    else:
-        ais_age_text = f"{ais_age_min:.0f} min ago"
+    ais_age_text = "N/A" if ais_age_min is None else f"{ais_age_min:.0f} min ago"
 
-    # Nearest port
+    # Nearest port (fallback distance)
     nearest_name, nearest_nm = nearest_port(lat, lon, ports)
     nearest_name_disp = nearest_name.upper() if nearest_name else "N/A"
-    dist_text = "N/A"
+    nearest_dist_text = "N/A"
     if nearest_nm is not None:
-        dist_text = f"{nearest_nm:.1f} NM"
+        nearest_dist_text = f"{nearest_nm:.1f} NM"
 
-    # Build new state snapshot
+    # Destination distance (try to match destination to a known port)
+    dest_port_name = None
+    dest_distance_nm = None
+    if destination:
+        dp_name, dp_coords = match_destination_port(destination, ports)
+        if dp_name and dp_coords:
+            dest_port_name = dp_name
+            dest_distance_nm = haversine_nm(lat, lon, dp_coords["lat"], dp_coords["lon"])
+
+    # Build new state snapshot (saved into vessels_data.json)
     new_state = {
         "imo": imo,
         "name": name,
@@ -273,6 +292,8 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         "destination": destination,
         "nearest_port": nearest_name,
         "nearest_distance_nm": nearest_nm,
+        "destination_port": dest_port_name,
+        "destination_distance_nm": dest_distance_nm,
         "done": False,
     }
 
@@ -282,26 +303,30 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         arrived = True
         new_state["done"] = True
 
-    # ---------- FIRST TIME SEEN ----------
+    # -------- FIRST TIME SEEN --------
     if not prev_state:
         status_line = "First tracking detected"
+        dest_line = f"🎯 Destination: {destination or 'N/A'}"
+        if dest_port_name and dest_distance_nm is not None:
+            dest_line += f" (~{dest_distance_nm:.1f} NM to go)"
+
         lines = [
             f"🚢 {name} (IMO {imo})",
             f"📌 Status: {status_line}",
             f"🕒 AIS: {ais_age_text}",
             f"⚡ Speed: {sog:.1f} kn | 🧭 Course: {cog:.0f}°",
             f"📍 Position: {lat:.4f} , {lon:.4f}",
-            f"⚓ Nearest port: {nearest_name_disp} (~{dist_text})",
-            f"🎯 Destination: {destination or 'N/A'}",
+            f"⚓ Nearest port: {nearest_name_disp} (~{nearest_dist_text})",
+            dest_line,
         ]
         msg = "\n".join(lines)
         return msg, new_state
 
-    # Already marked as done before -> no more alerts
+    # Already marked as done -> no more alerts
     if prev_state.get("done"):
         return None, new_state
 
-    # ---------- CHANGE DETECTION ----------
+    # -------- CHANGE DETECTION --------
 
     # Destination change?
     dest_changed = (destination or "") != (prev_state.get("destination") or "")
@@ -315,14 +340,13 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         move_nm = haversine_nm(prev_lat, prev_lon, lat, lon)
         moved = move_nm >= MIN_MOVE_NM
 
-    # Arrival event (now arrived, before not done)
+    # Arrival this run?
     arrival_event = arrived and not prev_state.get("done")
 
-    # If nothing interesting -> no alert
     if not (dest_changed or moved or arrival_event):
         return None, new_state
 
-    # Choose status label
+    # Status label
     if arrival_event:
         status_line = "Arrived at destination area"
     elif dest_changed:
@@ -332,10 +356,13 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     else:
         status_line = "Update"
 
-    # Build nice WhatsApp message (Style D)
     extra_move = ""
     if move_nm is not None and moved:
         extra_move = f" (Δ {move_nm:.1f} NM)"
+
+    dest_line = f"🎯 Destination: {destination or 'N/A'}"
+    if dest_port_name and dest_distance_nm is not None:
+        dest_line += f" (~{dest_distance_nm:.1f} NM to go)"
 
     lines = [
         f"🚢 {name} (IMO {imo})",
@@ -343,12 +370,13 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         f"🕒 AIS: {ais_age_text}",
         f"⚡ Speed: {sog:.1f} kn | 🧭 Course: {cog:.0f}°{extra_move}",
         f"📍 Position: {lat:.4f} , {lon:.4f}",
-        f"⚓ Nearest port: {nearest_name_disp} (~{dist_text})",
-        f"🎯 Destination: {destination or 'N/A'}",
+        f"⚓ Nearest port: {nearest_name_disp} (~{nearest_dist_text})",
+        dest_line,
     ]
     msg = "\n".join(lines)
 
     return msg, new_state
+
 
 
 # ============================================================
