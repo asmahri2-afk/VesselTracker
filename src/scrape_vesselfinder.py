@@ -380,9 +380,14 @@ def main():
             print("[ALERT]", alert)
             send_whatsapp_message(alert)
 
-    # Save updated state
-    save_json(VESSELS_STATE_PATH, new_all)
-    print("Saved vessels_data.json ✔")
+    # Save updated state (only if we have at least one vessel)
+    print(f"[INFO] Built state for {len(new_all)} vessel(s).")
+    if new_all:
+        save_json(VESSELS_STATE_PATH, new_all)
+        print("Saved vessels_data.json ✔")
+    else:
+        print("[INFO] No valid vessel data, keeping existing vessels_data.json (not overwriting with {}).")
+
 
 
 # ============================================================
