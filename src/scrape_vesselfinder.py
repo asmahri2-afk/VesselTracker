@@ -226,7 +226,7 @@ def fetch_from_render_api(imo: str) -> dict:
 def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     """
     Returns (alert_message: str | None, new_state: dict).
-    - Skips if AIS is older than MAX_AIS_MINUTES.
+    - Skips alert if nothing interesting changed.
     - Marks vessel as 'done' when arrived at destination and stopped.
     - Sends alert on:
         * first time we see the vessel
@@ -234,6 +234,7 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         * destination change
         * arrival event
     """
+
     imo = v["imo"]
     name = v.get("name", f"IMO {imo}")
     lat = v["lat"]
@@ -241,18 +242,26 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     sog = v["sog"]
     cog = v["cog"]
     last_pos_utc = v.get("last_pos_utc")
-    destination = v.get("destination", "")
+    destination = (v.get("destination") or "").strip()
 
-    # AIS age filter
+    # AIS age (for display + optional filtering)
     ais_age_min = age_minutes(last_pos_utc) if last_pos_utc else None
     if ais_age_min is not None and ais_age_min > MAX_AIS_MINUTES:
-        print(f"[INFO] IMO {imo}: AIS {ais_age_min:.1f} min old, skipping.")
-        # still update state but no alert
-        pass
+        print(f"[INFO] IMO {imo}: AIS {ais_age_min:.1f} min old (>{MAX_AIS_MINUTES}), still updating state.")
+    # Text for display
+    if ais_age_min is None:
+        ais_age_text = "N/A"
+    else:
+        ais_age_text = f"{ais_age_min:.0f} min ago"
 
     # Nearest port
     nearest_name, nearest_nm = nearest_port(lat, lon, ports)
+    nearest_name_disp = nearest_name.upper() if nearest_name else "N/A"
+    dist_text = "N/A"
+    if nearest_nm is not None:
+        dist_text = f"{nearest_nm:.1f} NM"
 
+    # Build new state snapshot
     new_state = {
         "imo": imo,
         "name": name,
@@ -273,26 +282,26 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         arrived = True
         new_state["done"] = True
 
-    # No previous state → first alert
+    # ---------- FIRST TIME SEEN ----------
     if not prev_state:
-        status = "ARRIVED" if arrived else "FIRST TRACK"
-        msg = (
-            f"{status} {name} (IMO {imo}) | "
-            f"AIS: {('?.?' if ais_age_min is None else f'{ais_age_min:.0f} min')} | "
-            f"SOG: {sog:.1f} kn | COG: {cog:.0f}° | "
-            f"POS: {lat:.4f}, {lon:.4f} | "
-            f"Nearest port: {nearest_name} (~{nearest_nm:.1f} NM) | "
-            f"Destination: {destination or 'N/A'}"
-        )
+        status_line = "First tracking detected"
+        lines = [
+            f"🚢 {name} (IMO {imo})",
+            f"📌 Status: {status_line}",
+            f"🕒 AIS: {ais_age_text}",
+            f"⚡ Speed: {sog:.1f} kn | 🧭 Course: {cog:.0f}°",
+            f"📍 Position: {lat:.4f} , {lon:.4f}",
+            f"⚓ Nearest port: {nearest_name_disp} (~{dist_text})",
+            f"🎯 Destination: {destination or 'N/A'}",
+        ]
+        msg = "\n".join(lines)
         return msg, new_state
 
-    # If already done (arrived earlier), do nothing
+    # Already marked as done before -> no more alerts
     if prev_state.get("done"):
-        # Allow sending ONE final message when it first becomes done
-        if arrived and not prev_state.get("done"):
-            # (This case won't happen: done would be False before.)
-            pass
         return None, new_state
+
+    # ---------- CHANGE DETECTION ----------
 
     # Destination change?
     dest_changed = (destination or "") != (prev_state.get("destination") or "")
@@ -309,33 +318,35 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     # Arrival event (now arrived, before not done)
     arrival_event = arrived and not prev_state.get("done")
 
+    # If nothing interesting -> no alert
     if not (dest_changed or moved or arrival_event):
-        # Nothing interesting
         return None, new_state
 
-    # Build alert text
-    parts = []
+    # Choose status label
     if arrival_event:
-        parts.append("ARRIVED")
+        status_line = "Arrived at destination area"
     elif dest_changed:
-        parts.append("DEST-CHG")
+        status_line = "Destination changed"
     elif moved:
-        parts.append("MOVED")
+        status_line = "Position / track updated"
+    else:
+        status_line = "Update"
 
-    tag = "/".join(parts) if parts else "UPDATE"
+    # Build nice WhatsApp message (Style D)
+    extra_move = ""
+    if move_nm is not None and moved:
+        extra_move = f" (Δ {move_nm:.1f} NM)"
 
-    dist_str = f"{nearest_nm:.1f} NM" if nearest_nm is not None else "N/A"
-    age_str = "?.?" if ais_age_min is None else f"{ais_age_min:.0f} min"
-    move_str = "" if move_nm is None else f" | Δ={move_nm:.1f} NM"
-
-    msg = (
-        f"{tag} {name} (IMO {imo}) | "
-        f"AIS: {age_str} | SOG: {sog:.1f} kn | COG: {cog:.0f}° | "
-        f"POS: {lat:.4f}, {lon:.4f} | "
-        f"Nearest port: {nearest_name} (~{dist_str}) | "
-        f"Destination: {destination or 'N/A'}"
-        f"{move_str}"
-    )
+    lines = [
+        f"🚢 {name} (IMO {imo})",
+        f"📌 Status: {status_line}",
+        f"🕒 AIS: {ais_age_text}",
+        f"⚡ Speed: {sog:.1f} kn | 🧭 Course: {cog:.0f}°{extra_move}",
+        f"📍 Position: {lat:.4f} , {lon:.4f}",
+        f"⚓ Nearest port: {nearest_name_disp} (~{dist_text})",
+        f"🎯 Destination: {destination or 'N/A'}",
+    ]
+    msg = "\n".join(lines)
 
     return msg, new_state
 
