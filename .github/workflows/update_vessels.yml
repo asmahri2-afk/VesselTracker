@@ -31,8 +31,12 @@ jobs:
           pip install requests beautifulsoup4
 
       - name: Run scraper
+        env:
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
         run: |
           python src/scrape_vesselfinder.py
+
 
       - name: Commit & push changes
         run: |
