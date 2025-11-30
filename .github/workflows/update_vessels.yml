@@ -5,7 +5,7 @@ on:
     paths:
       - "data/tracked_imos.json"
   schedule:
-    - cron: "*/30 * * * *
+    - cron: "*/30 * * * *"   # every 30 minutes
   workflow_dispatch:
 
 jobs:
@@ -35,13 +35,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           echo "Git status before commit:"
           git status
-
-          # Only commit if something changed
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git add data/vessels_data.json data/tracked_imos.json || true
+          # Only commit if vessels_data.json changed
+          if [[ -n "$(git status --porcelain data/vessels_data.json)" ]]; then
+            git add data/vessels_data.json
             git commit -m "Update vessels data #${{ github.run_number }}"
             git push origin main
           else
