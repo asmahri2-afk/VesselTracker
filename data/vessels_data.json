@@ -4,9 +4,9 @@
     "name": "NAVE SANTA MARIA",
     "lat": 29.0,
     "lon": -14.0,
-    "sog": 0.3,
-    "cog": 144.8,
-    "last_pos_utc": "Nov 30, 2025 20:39 UTC",
+    "sog": 0.1,
+    "cog": 226.0,
+    "last_pos_utc": "Nov 30, 2025 21:12 UTC",
     "destination": "Tan Tan, Morocco",
     "nearest_port": "ARRECIFE",
     "nearest_distance_nm": 23.89592797156753,
@@ -57,6 +57,21 @@
     "nearest_distance_nm": 14.253809912438356,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 14.253809912438356,
+    "done": false
+  },
+  "9933913": {
+    "imo": "9933913",
+    "name": "CHALLAH",
+    "lat": 34.0,
+    "lon": -7.0,
+    "sog": 0.1,
+    "cog": 237.2,
+    "last_pos_utc": "Nov 30, 2025 21:12 UTC",
+    "destination": "Mohammedia Anch., Morocco",
+    "nearest_port": "KENITRA",
+    "nearest_distance_nm": 23.6226331151267,
+    "destination_port": "MOHAMMEDIA",
+    "destination_distance_nm": 27.122009746065412,
     "done": false
   }
 }
