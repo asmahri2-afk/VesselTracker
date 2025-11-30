@@ -2,5 +2,27 @@
   "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
   "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
   "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
-  "DAKHLA": {"lat": 23.7048, "lon": -15.9336}
+  "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
+
+  "AGADIR": {"lat": 30.4200, "lon": -9.5980},
+  "ESSAOUIRA": {"lat": 31.5125, "lon": -9.7696},
+  "SAFI": {"lat": 32.2990, "lon": -9.2372},
+  "JORF LASFAR": {"lat": 33.1071, "lon": -8.6333},
+  "CASABLANCA": {"lat": 33.6072, "lon": -7.6114},
+  "MOHAMMEDIA": {"lat": 33.7041, "lon": -7.3850},
+  "KENITRA": {"lat": 34.2560, "lon": -6.5840},
+  "RABAT": {"lat": 34.0167, "lon": -6.8333},
+  "LARACHE": {"lat": 35.1930, "lon": -6.1540},
+  "TANGER": {"lat": 35.7806, "lon": -5.8089},
+  "TANGER MED": {"lat": 35.9033, "lon": -5.5028},
+
+  "LAS PALMAS": {"lat": 28.1333, "lon": -15.4333},
+  "SANTA CRUZ DE TENERIFE": {"lat": 28.4636, "lon": -16.2518},
+  "ARRECIFE": {"lat": 28.9630, "lon": -13.5470},
+  "PUERTO DEL ROSARIO": {"lat": 28.5000, "lon": -13.8667},
+  "SAN SEBASTIAN DE LA GOMERA": {"lat": 28.0881, "lon": -17.1060},
+  "LA PALMA SANTA CRUZ": {"lat": 28.6847, "lon": -17.7642},
+
+  "ALGECIRAS": {"lat": 36.1333, "lon": -5.4500},
+  "CARTAGENA": {"lat": 37.6000, "lon": -0.9833}
 }
