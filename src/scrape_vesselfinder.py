@@ -1,20 +1,19 @@
 import json
 import math
 import os
-import requests
-from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
+
 # ============================================================
-# CONFIG
+# PATHS / CONFIG
 # ============================================================
 
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
 
-# Default ports if ports.json is missing
 DEFAULT_PORTS = {
     "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
     "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
@@ -22,20 +21,12 @@ DEFAULT_PORTS = {
     "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
 }
 
-# WhatsApp (prefer env, fallback to hard-coded for local tests)
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE") or "212663401022"
 CALLMEBOT_API_KEY = os.getenv("CALLMEBOT_API_KEY") or "9206809"
 
-# AIS freshness threshold (min) – only report if last AIS < this
 FRESH_SIGNAL_MINUTES = 30
-
-# How much movement / distance change to consider "changed" (NM)
 MIN_MOVE_NM = 2.0
-
-# Distance to destination considered "arrived / moored" (NM)
 ARRIVAL_RADIUS_NM = 1.0
-
-# Max SOG to consider "moored"
 ARRIVAL_MAX_SOG = 1.0
 
 
@@ -86,7 +77,7 @@ def distance_nm(lat1, lon1, lat2, lon2) -> float:
 
 def send_whatsapp_message(msg: str):
     if not CALLMEBOT_PHONE or not CALLMEBOT_API_KEY:
-        print("[WARN] CallMeBot not configured, message below:")
+        print("[WARN] CallMeBot not configured:")
         print(msg)
         return
 
@@ -94,11 +85,12 @@ def send_whatsapp_message(msg: str):
         "https://api.callmebot.com/whatsapp.php"
         f"?phone={CALLMEBOT_PHONE}&text={requests.utils.quote(msg)}&apikey={CALLMEBOT_API_KEY}"
     )
+
     try:
-        requests.get(url, timeout=10)
-        print(f"[ALERT SENT] {msg}")
-    except Exception:
-        print("[ERROR] WhatsApp alert failed.")
+        r = requests.get(url, timeout=10)
+        print(f"[INFO] WhatsApp status: {r.status_code}")
+    except Exception as e:
+        print("[ERROR] WhatsApp alert failed:", e)
 
 
 # ============================================================
@@ -127,12 +119,15 @@ def match_destination_port(dest_text: str, ports: dict):
 
 
 # ============================================================
-# SCRAPER FOR VESSELFINDER
+# TEMP SCRAPER STUB (for testing)
 # ============================================================
 
-from datetime import datetime, timezone
-
 def scrape_vesselfinder(imo: str) -> dict:
+    """
+    TEMPORARY STUB for testing.
+    Returns fake but realistic AIS data so we can test workflow,
+    state logic, distance, nearest port, WhatsApp alerts.
+    """
     now_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     print(f"[STUB] Returning fake AIS for IMO {imo} at {now_utc}")
 
@@ -148,8 +143,6 @@ def scrape_vesselfinder(imo: str) -> dict:
     }
 
 
-
-
 # ============================================================
 # ALERT + STATE LOGIC
 # ============================================================
@@ -159,19 +152,16 @@ def compute_age_minutes(last_utc: str | None) -> float | None:
         return None
     try:
         dt = datetime.fromisoformat(last_utc.replace("Z", "+00:00"))
-        age_mins = (datetime.now(timezone.utc) - dt).total_seconds() / 60
-        return age_mins
+        return (datetime.now(timezone.utc) - dt).total_seconds() / 60
     except Exception:
         return None
 
 
 def detect_changes_and_message(v: dict, ports: dict, previous: dict):
-    """
-    Returns (new_state_dict, optional_message_str_or_None)
-    """
     name = v.get("name", "UNKNOWN")
     imo = v.get("imo")
-    lat, lon = v.get("lat"), v.get("lon")
+    lat = v.get("lat")
+    lon = v.get("lon")
     sog = v.get("sog") or 0.0
     cog = v.get("cog") or 0.0
     dest_text = v.get("destination") or ""
@@ -182,7 +172,6 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
 
     age_mins = compute_age_minutes(last_utc)
     if age_mins is None or age_mins > FRESH_SIGNAL_MINUTES:
-        # AIS too old -> update state but do NOT alert
         new_state = {
             **previous,
             "name": name,
@@ -197,23 +186,21 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
         }
         return new_state, None
 
-    # nearest port / distance
     near_port, near_dist = nearest_port(lat, lon, ports)
 
-    # destination port / distance
     dest_port = match_destination_port(dest_text, ports)
     if dest_port:
         dest_dist = distance_nm(lat, lon, ports[dest_port]["lat"], ports[dest_port]["lon"])
     else:
         dest_dist = None
 
-    # arrival detection (approximate "moored at destination")
-    arrived = False
-    if dest_port and dest_dist is not None:
-        if dest_dist <= ARRIVAL_RADIUS_NM and sog <= ARRIVAL_MAX_SOG:
-            arrived = True
+    arrived = (
+        dest_port is not None
+        and dest_dist is not None
+        and dest_dist <= ARRIVAL_RADIUS_NM
+        and sog <= ARRIVAL_MAX_SOG
+    )
 
-    # if already done before, keep done=True and don't alert again
     if previous.get("done") and arrived:
         new_state = {
             **previous,
@@ -234,14 +221,13 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
         }
         return new_state, None
 
-    # movement / change tests
     moved = False
     if "lat" in previous and "lon" in previous:
-        prev_d = distance_nm(previous["lat"], previous["lon"], lat, lon)
-        if prev_d >= MIN_MOVE_NM:
+        prev_move = distance_nm(previous["lat"], previous["lon"], lat, lon)
+        if prev_move >= MIN_MOVE_NM:
             moved = True
     else:
-        moved = True  # first time tracking
+        moved = True
 
     dest_dist_changed = False
     if dest_dist is not None:
@@ -250,13 +236,10 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
             dest_dist_changed = True
 
     near_port_changed = near_port != previous.get("nearest_port")
-    TEMPORARY STUB for testing.
-
     arrival_changed = arrived and not previous.get("done")
 
     should_alert = moved or dest_dist_changed or near_port_changed or arrival_changed
 
-    # Build message if needed
     msg = None
     if should_alert:
         lines = [
@@ -268,24 +251,12 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
             lines.append(f"Nearest port: {near_port} (~{near_dist:.1f} NM)")
         if dest_port and dest_dist is not None:
             lines.append(f"Destination: {dest_port} (~{dest_dist:.1f} NM to go)")
-        elif dest_text:
-            lines.append(f"Destination (raw): {dest_text}")
-
         if arrival_changed:
-            lines.append(">>> ARRIVED / MOORED at destination – alerts stopped for this IMO.")
-
+            lines.append(">>> ARRIVED / MOORED at destination — alerts stopped.")
         msg = "\n".join(lines)
-    Returns fake but realistic AIS data so we can test:
-    - workflow
-    - state file
-    - WhatsApp alerts
-    - nearest port + distance logic
-    """
-    now_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     new_state = {
         "name": name,
-    return {
         "imo": imo,
         "lat": lat,
         "lon": lon,
@@ -299,14 +270,6 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
         "dest_port": dest_port,
         "dest_dist_nm": dest_dist,
         "done": previous.get("done") or arrived,
-        "name": f"TEST VESSEL {imo}",
-        # Somewhere off Laayoune
-        "lat": 27.20,
-        "lon": -13.40,
-        "sog": 11.5,          # knots
-        "cog": 300.0,         # degrees
-        "last_pos_utc": now_utc,
-        "destination": "DAKHLA",
     }
 
     return new_state, msg
@@ -317,23 +280,23 @@ def detect_changes_and_message(v: dict, ports: dict, previous: dict):
 # ============================================================
 
 def main():
-    # Load tracked IMOs
     imos = load_tracked_imos()
     print("Tracked IMOs:", imos)
 
-    # Load ports list (merged with defaults)
-    ports_from_file = load_json(PORTS_PATH, {})
-    ports = {**DEFAULT_PORTS, **ports_from_file}
+    if not imos:
+        print("No IMOs tracked.")
+        return
 
-    # Previous states (position / dist / done flag per IMO)
+    ports_file = load_json(PORTS_PATH, {})
+    ports = {**DEFAULT_PORTS, **ports_file}
+
     old_data = load_json(VESSELS_STATE_PATH, {})
-
     new_data = {}
 
     for imo in imos:
         prev_state = old_data.get(imo, {})
-
         v = scrape_vesselfinder(imo)
+
         if not v:
             print(f"[WARN] Could not scrape IMO {imo}")
             continue
@@ -345,7 +308,6 @@ def main():
             print("[ALERT]", message.replace("\n", " | "))
             send_whatsapp_message(message)
 
-    # Save updated vessels + state
     save_json(VESSELS_STATE_PATH, new_data)
     print("Saved vessels_data.json ✔")
 
