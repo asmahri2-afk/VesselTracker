@@ -124,23 +124,47 @@ def match_destination_port(dest_text: str, ports: dict):
 
 def scrape_vesselfinder(imo: str) -> dict:
     """
-    TEMPORARY STUB for testing.
-    Returns fake but realistic AIS data so we can test workflow,
-    state logic, distance, nearest port, WhatsApp alerts.
+    PRODUCTION VERSION
+    Fetches live AIS from your Render API instead of scraping VesselFinder.
+    Must return:
+    {
+      "imo": "...",
+      "name": "...",
+      "lat": <float>,
+      "lon": <float>,
+      "sog": <float>,
+      "cog": <float>,
+      "last_pos_utc": "2025-11-30T16:20:00Z",
+      "destination": "AGADIR"  # or raw text
+    }
     """
-    now_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    print(f"[STUB] Returning fake AIS for IMO {imo} at {now_utc}")
+    url = f"https://vessel-api-s85s.onrender.com/vessel/{imo}"
+
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[ERROR] API request failed for {imo}: {e}")
+        return {}
+
+    data = r.json()
+
+    # Validate minimal required fields
+    if "lat" not in data or "lon" not in data:
+        print(f"[WARN] Missing lat/lon for IMO {imo}")
+        return {}
 
     return {
         "imo": imo,
-        "name": f"TEST VESSEL {imo}",
-        "lat": 27.20,
-        "lon": -13.40,
-        "sog": 11.5,
-        "cog": 300.0,
-        "last_pos_utc": now_utc,
-        "destination": "DAKHLA",
+        "name": data.get("name", f"IMO {imo}"),
+        "lat": float(data.get("lat")),
+        "lon": float(data.get("lon")),
+        "sog": float(data.get("sog", 0.0)),
+        "cog": float(data.get("cog", 0.0)),
+        "last_pos_utc": data.get("last_pos_utc"),  # must be ISO timestamp
+        "destination": data.get("destination", "")
     }
+
 
 
 # ============================================================
