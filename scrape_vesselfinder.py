@@ -63,7 +63,7 @@ def haversine_nm(lat1, lon1, lat2, lon2) -> float:
     lat1_r = math.radians(lat1)
     lon1_r = math.radians(lon1)
     lat2_r = math.radians(lat2)
-    lon2_r = math.radians(lon2)
+    lon2_r = math.radians(lat2)
 
     dlat = lat2_r - lat1_r
     dlon = lon2_r - lon1_r
@@ -189,7 +189,8 @@ def fetch_from_render_api(imo: str) -> dict:
     print("Fetching from API:", url)
 
     try:
-        r = requests.get(url, timeout=25)
+        # more generous timeout for cold / slow responses
+        r = requests.get(url, timeout=60)
         r.raise_for_status()
     except Exception as e:
         print(f"[ERROR] API request failed for IMO {imo}: {e}")
@@ -393,6 +394,15 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
 # ============================================================
 
 def main():
+
+    # WARM-UP RENDER API (avoid cold-start timeouts)
+    try:
+        print("[INFO] Warming up Render API...")
+        requests.get(f"{RENDER_BASE}/ping", timeout=10)
+        print("[INFO] Render API awake ✔")
+    except Exception as e:
+        print(f"[WARN] Warm-up failed: {e}")
+
     # Load tracked IMOs
     tracked = load_json(TRACKED_IMOS_PATH, [])
     if isinstance(tracked, dict) and "tracked_imos" in tracked:
