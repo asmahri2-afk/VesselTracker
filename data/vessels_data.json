@@ -1,4 +1,19 @@
 {
+  "6417499": {
+    "imo": "6417499",
+    "name": "NAVE SANTA MARIA",
+    "lat": 27.0,
+    "lon": -14.0,
+    "sog": 7.0,
+    "cog": 219.0,
+    "last_pos_utc": "Dec 1, 2025 22:27 UTC",
+    "destination": "Dakhla, Morocco",
+    "nearest_port": "LAAYOUNE",
+    "nearest_distance_nm": 43.578384455902196,
+    "destination_port": "DAKHLA",
+    "destination_distance_nm": 223.9293320769432,
+    "done": false
+  },
   "7325461": {
     "imo": "7325461",
     "name": "DURA BULK",
