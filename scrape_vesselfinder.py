@@ -222,6 +222,7 @@ def fetch_from_render_api(imo: str) -> dict:
 # ============================================================
 # ALERT LOGIC
 # ============================================================
+
 def match_destination_port(destination: str, ports: dict):
     """
     Try to match destination string (e.g. 'Tan Tan, Morocco')
@@ -245,7 +246,7 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     - First time seen -> 'First tracking detected' alert
     - Later:
         * movement >= MIN_MOVE_NM
-        * destination change
+        * destination change (OLD ➜ NEW)
         * arrival near port with low speed
     """
 
@@ -328,8 +329,12 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
 
     # -------- CHANGE DETECTION --------
 
-    # Destination change?
-    dest_changed = (destination or "") != (prev_state.get("destination") or "")
+    # Destination change? (normalize + case-insensitive)
+    old_dest_raw = (prev_state.get("destination") or "").strip()
+    new_dest_raw = destination
+    dest_changed = bool(old_dest_raw or new_dest_raw) and (
+        old_dest_raw.upper() != new_dest_raw.upper()
+    )
 
     # Movement?
     prev_lat = prev_state.get("lat")
@@ -360,7 +365,12 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     if move_nm is not None and moved:
         extra_move = f" (Δ {move_nm:.1f} NM)"
 
-    dest_line = f"🎯 Destination: {destination or 'N/A'}"
+    # Destination line with OLD ➜ NEW when changed
+    if dest_changed and old_dest_raw:
+        dest_line = f"🎯 Destination changed: {old_dest_raw} ➜ {destination or 'N/A'}"
+    else:
+        dest_line = f"🎯 Destination: {destination or 'N/A'}"
+
     if dest_port_name and dest_distance_nm is not None:
         dest_line += f" (~{dest_distance_nm:.1f} NM to go)"
 
@@ -376,7 +386,6 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     msg = "\n".join(lines)
 
     return msg, new_state
-
 
 
 # ============================================================
@@ -426,7 +435,6 @@ def main():
         print("Saved vessels_data.json ✔")
     else:
         print("[INFO] No valid vessel data, keeping existing vessels_data.json (not overwriting with {}).")
-
 
 
 # ============================================================
