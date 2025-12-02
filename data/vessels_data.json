@@ -89,21 +89,6 @@
     "destination_distance_nm": null,
     "done": false
   },
-  "9708681": {
-    "imo": "9708681",
-    "name": "MSC SVEVA",
-    "lat": 26.0,
-    "lon": -15.0,
-    "sog": 16.6,
-    "cog": 36.0,
-    "last_pos_utc": "Dec 2, 2025 23:19 UTC",
-    "destination": "Ashdod, Israel",
-    "nearest_port": "LAAYOUNE",
-    "nearest_distance_nm": 118.76141768839241,
-    "destination_port": null,
-    "destination_distance_nm": null,
-    "done": false
-  },
   "9933913": {
     "imo": "9933913",
     "name": "CHALLAH",
@@ -111,7 +96,7 @@
     "lon": -7.0,
     "sog": 0.0,
     "cog": 255.7,
-    "last_pos_utc": "Dec 2, 2025 23:29 UTC",
+    "last_pos_utc": "Dec 2, 2025 23:32 UTC",
     "destination": "Mohammedia, Morocco",
     "nearest_port": "KENITRA",
     "nearest_distance_nm": 23.6226331151267,
