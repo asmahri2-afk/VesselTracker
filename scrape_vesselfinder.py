@@ -4,7 +4,7 @@ import os
 import re
 import requests
 import requests.utils
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # ============================================================
@@ -19,7 +19,7 @@ PORTS_PATH = Path("data/ports.json")
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
 CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY")
 CALLMEBOT_ENABLED = bool(CALLMEBOT_PHONE and CALLMEBOT_APIKEY)
-CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php" # Added constant
+CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"  # Added constant
 
 print(f"[DEBUG] CALLMEBOT_PHONE: {'SET' if CALLMEBOT_PHONE else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
@@ -28,7 +28,7 @@ print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
 # Your Render API
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
-# AIS age threshold in minutes
+# AIS age threshold in minutes (for general info)
 MAX_AIS_MINUTES = 30
 
 # Distance threshold (NM) to consider “arrived” at destination
@@ -36,6 +36,13 @@ ARRIVAL_RADIUS_NM = 10.0
 
 # Min movement (NM) to consider course/pos “changed”
 MIN_MOVE_NM = 5.0
+
+# ETA config
+MIN_SOG_FOR_ETA = 0.5        # kn, below this we don't compute ETA
+MAX_ETA_HOURS = 240          # ignore ETA if > 10 days
+MAX_ETA_SOG_CAP = 18.0       # cap extreme AIS spikes
+MAX_AIS_FOR_ETA_MIN = 360    # if AIS older than 6h, skip ETA
+MIN_DISTANCE_FOR_ETA = 2.0   # NM, if closer than this, skip ETA
 
 
 # ============================================================
@@ -74,7 +81,7 @@ def haversine_nm(lat1, lon1, lat2, lon2) -> float:
     lat1_r = math.radians(lat1)
     lon1_r = math.radians(lon1)
     lat2_r = math.radians(lat2)
-    lon2_r = math.radians(lon2) # <<< FIX: Must use lon2 here
+    lon2_r = math.radians(lon2)  # <<< FIX: Must use lon2 here
 
     dlat = lat2_r - lat1_r
     dlon = lon2_r - lon1_r
@@ -112,7 +119,6 @@ def nearest_port(lat: float, lon: float, ports: dict):
     best_name = None
     best_nm = None
     for name, coords in ports.items():
-        # Ensure we are using the corrected Haversine here
         d_nm = haversine_nm(lat, lon, coords["lat"], coords["lon"])
         if best_nm is None or d_nm < best_nm:
             best_nm = d_nm
@@ -127,24 +133,18 @@ def nearest_port(lat: float, lon: float, ports: dict):
 def parse_ais_time(s: str) -> datetime | None:
     """
     Parses the AIS time string (e.g., "Nov 30, 2025 17:07 UTC") into a UTC-aware datetime object.
-    
-    Revised to remove ' UTC' and explicitly set timezone for robustness.
     """
     if not s:
         return None
     s = s.strip()
-    
+
     # Remove ' UTC' to parse the format cleanly without relying on %Z
     s_cleaned = s.replace(' UTC', '').strip()
 
     try:
-        # Parse the date and time string
         dt_naive = datetime.strptime(s_cleaned, "%b %d, %Y %H:%M")
-        
-        # Make it explicitly UTC aware
         dt_aware = dt_naive.replace(tzinfo=timezone.utc)
         return dt_aware
-        
     except Exception as e:
         print(f"[WARN] Failed to parse AIS timestamp '{s}': {e}")
         return None
@@ -177,9 +177,8 @@ def send_whatsapp_message(text: str):
     }
 
     try:
-        # requests handles the URL encoding of the 'text' parameter automatically
         r = requests.get(CALLMEBOT_API_URL, params=params, timeout=20)
-        r.raise_for_status() # Raises HTTPError for bad status codes
+        r.raise_for_status()
         print(f"[INFO] WhatsApp status: {r.status_code}")
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] WhatsApp send failed: {e}")
@@ -197,7 +196,6 @@ def fetch_from_render_api(imo: str) -> dict:
     print(f"[INFO] Fetching from API: {url}")
 
     try:
-        # more generous timeout for cold / slow responses
         r = requests.get(url, timeout=60)
         r.raise_for_status()
     except Exception as e:
@@ -216,7 +214,6 @@ def fetch_from_render_api(imo: str) -> dict:
         print(f"[WARN] API: missing lat/lon for IMO {imo}")
         return {}
 
-    # Normalize name and destination
     name = (data.get("name") or f"IMO {imo}").strip()
     destination = (data.get("destination") or "").strip()
 
@@ -246,11 +243,28 @@ def match_destination_port(destination: str, ports: dict):
 
     dest_up = destination.upper()
     for port_name, info in ports.items():
-        # Check if the port name is contained within the destination string
         if port_name in dest_up:
             return port_name, info
 
     return None, None
+
+
+def humanize_eta(eta_hours: float) -> str:
+    """Turn ETA in hours into a short 'Xd Yh' / 'Xh Ym' text."""
+    total_minutes = int(round(eta_hours * 60))
+    hours = total_minutes // 60
+    mins = total_minutes % 60
+
+    if hours < 24:
+        if mins:
+            return f"{hours}h {mins}m"
+        return f"{hours}h"
+
+    days = hours // 24
+    rem_h = hours % 24
+    if rem_h:
+        return f"{days}d {rem_h}h"
+    return f"{days}d"
 
 
 def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
@@ -274,6 +288,9 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         print(f"[INFO] IMO {imo}: AIS {ais_age_min:.1f} min old (>{MAX_AIS_MINUTES}), still updating state.")
     ais_age_text = "N/A" if ais_age_min is None else f"{ais_age_min:.0f} min ago"
 
+    # For ETA: too old AIS -> no ETA
+    too_old_for_eta = ais_age_min is not None and ais_age_min > MAX_AIS_FOR_ETA_MIN
+
     # Nearest port (fallback distance)
     nearest_name, nearest_nm = nearest_port(lat, lon, ports)
     nearest_name_disp = nearest_name.upper() if nearest_name else "N/A"
@@ -290,6 +307,32 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
             dest_port_name = dp_name
             dest_distance_nm = haversine_nm(lat, lon, dp_coords["lat"], dp_coords["lon"])
 
+    # ETA calculation with safeguards
+    eta_hours = None
+    eta_utc_str = None
+    eta_text = None
+
+    if (
+        dest_distance_nm is not None
+        and dest_distance_nm > MIN_DISTANCE_FOR_ETA
+        and sog is not None
+        and sog >= MIN_SOG_FOR_ETA
+        and not too_old_for_eta
+    ):
+        # Clamp SOG to avoid nonsense (negative or crazy spikes)
+        effective_sog = min(max(sog, MIN_SOG_FOR_ETA), MAX_ETA_SOG_CAP)
+
+        try:
+            eta_hours_raw = dest_distance_nm / effective_sog
+        except ZeroDivisionError:
+            eta_hours_raw = None
+
+        if eta_hours_raw is not None and eta_hours_raw <= MAX_ETA_HOURS:
+            eta_hours = eta_hours_raw
+            eta_dt = datetime.now(timezone.utc) + timedelta(hours=eta_hours)
+            eta_utc_str = eta_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+            eta_text = humanize_eta(eta_hours)
+
     # Build new state snapshot (saved into vessels_data.json)
     new_state = {
         "imo": imo,
@@ -304,6 +347,9 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         "nearest_distance_nm": nearest_nm,
         "destination_port": dest_port_name,
         "destination_distance_nm": dest_distance_nm,
+        "eta_hours": eta_hours,
+        "eta_utc": eta_utc_str,
+        "eta_text": eta_text,
         "done": False,
     }
 
@@ -329,6 +375,10 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
             f"⚓ Nearest port: {nearest_name_disp} (~{nearest_dist_text})",
             dest_line,
         ]
+
+        if eta_text and eta_utc_str:
+            lines.append(f"⏱ ETA: {eta_text} ({eta_utc_str})")
+
         msg = "\n".join(lines)
         return msg, new_state
 
@@ -392,6 +442,10 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         f"⚓ Nearest port: {nearest_name_disp} (~{nearest_dist_text})",
         dest_line,
     ]
+
+    if eta_text and eta_utc_str:
+        lines.append(f"⏱ ETA: {eta_text} ({eta_utc_str})")
+
     msg = "\n".join(lines)
 
     return msg, new_state
@@ -406,7 +460,6 @@ def main():
     # WARM-UP RENDER API (avoid cold-start timeouts)
     try:
         print("[INFO] Warming up Render API...")
-        # Assuming RENDER_BASE is correct and '/ping' endpoint exists
         requests.get(f"{RENDER_BASE}/ping", timeout=10)
         print("[INFO] Render API awake ✔")
     except Exception as e:
@@ -415,7 +468,6 @@ def main():
     # Load tracked IMOs
     imos = load_json(TRACKED_IMOS_PATH, [])
     
-    # Simple check for list/dict structure (simplified from original logic)
     if isinstance(imos, dict) and "tracked_imos" in imos:
         imos = imos.get("tracked_imos", [])
 
@@ -440,7 +492,6 @@ def main():
         v = fetch_from_render_api(imo)
         if not v:
             print(f"[WARN] Could not scrape IMO {imo}. Skipping update for this vessel.")
-            # If API fails, keep old state for this vessel if it existed
             if imo in prev_all:
                 new_all[imo] = prev_all[imo]
             continue
@@ -453,14 +504,11 @@ def main():
             print("[ALERT]", alert)
             send_whatsapp_message(alert)
 
-    # Save updated state (only if we have at least one vessel)
     print(f"[INFO] Built state for {len(new_all)} vessel(s).")
     if new_all:
         save_json(VESSELS_STATE_PATH, new_all)
         print("Saved vessels_data.json ✔")
     else:
-        # NOTE: This should only happen if all IMOs fail to fetch. If it happens,
-        # we retain the last known good state to prevent loss of tracking history.
         print("[INFO] No valid vessel data, keeping existing vessels_data.json.")
 
 
