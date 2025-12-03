@@ -43,7 +43,7 @@ MIN_SOG_FOR_ETA = 0.5        # kn, below this we don't compute ETA
 MAX_ETA_HOURS = 240          # ignore ETA if > 10 days
 MAX_ETA_SOG_CAP = 18.0       # cap extreme AIS spikes
 MAX_AIS_FOR_ETA_MIN = 360    # if AIS older than 6h, skip ETA
-MIN_DISTANCE_FOR_ETA = 2.0   # NM, if closer than this, skip ETA
+MIN_DISTANCE_FOR_ETA = 5.0   # NM, if closer than this, skip ETA
 
 
 # ============================================================
