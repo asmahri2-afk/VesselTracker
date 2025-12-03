@@ -461,7 +461,7 @@ def main():
     # WARM-UP RENDER API (avoid cold-start timeouts)
     try:
         print("[INFO] Warming up Render API...")
-        requests.get(f"{RENDER_BASE}/ping", timeout=10)
+        requests.get(f"{RENDER_BASE}/ping", timeout=30)
         print("[INFO] Render API awake ✔")
     except Exception as e:
         print(f"[WARN] Warm-up failed: {e}")
