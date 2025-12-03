@@ -24,6 +24,7 @@ CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"  # Added constant
 print(f"[DEBUG] CALLMEBOT_PHONE: {'SET' if CALLMEBOT_PHONE else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
+print("[DEBUG] ETA VERSION ACTIVE")
 
 # Your Render API
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
