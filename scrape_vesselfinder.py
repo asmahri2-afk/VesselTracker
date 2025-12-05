@@ -98,19 +98,14 @@ def haversine_nm(lat1, lon1, lat2, lon2) -> float:
 
 def load_ports() -> dict:
     """
-    Loads ports from ports.json or uses a hardcoded fallback if missing.
+    Loads ports from ports.json and returns a dict with upper-case keys.
     """
     ports = load_json(PORTS_PATH, {})
-    if ports:
-        return {k.upper(): v for k, v in ports.items()}
 
-    print("[WARN] Using hardcoded fallback ports.")
-    return {
-        "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
-        "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
-        "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
-        "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
-    }
+    if not ports:
+        raise RuntimeError("ports.json is missing or empty!")
+
+    return {k.upper(): v for k, v in ports.items()}
 
 
 def _normalize_text(s: str) -> str:
