@@ -34,7 +34,7 @@ RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 MAX_AIS_MINUTES = 30
 
 # Distance threshold (NM) to consider “arrived” at destination
-ARRIVAL_RADIUS_NM = 10.0
+ARRIVAL_RADIUS_NM = 35.5
 
 # Min movement (NM) to consider course/pos “changed”
 MIN_MOVE_NM = 5.0
