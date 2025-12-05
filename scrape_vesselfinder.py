@@ -491,7 +491,35 @@ def humanize_eta(eta_hours: float) -> str:
     if rem_h:
         return f"{days}d {rem_h}h"
     return f"{days}d"
+def override_lat_lon_from_marinetraffic(imo: str, vf_data: dict, shipid_map: dict):
+    """
+    If shipid exists in shipid_map.json, call MarineTraffic JSON endpoint.
+    If MT returns lat/lon successfully, override the VF position.
+    If not found or error → keep original VF data.
+    """
 
+    shipid = shipid_map.get(imo)
+    if not shipid:
+        return vf_data  # nothing to override
+
+    # httpbin patch (MT is blocked by 403)
+    test_url = f"https://httpbin.org/get?shipid={shipid}"
+
+    try:
+        r = requests.get(test_url, timeout=10)
+        r.raise_for_status()
+
+        # Normally you'd call MT like this:
+        # real_url = f"https://www.marinetraffic.com/api/exportvessel/v:5/shipid:{shipid}"
+        # mt_json = requests.get(real_url).json()
+
+        # For now: simulate failure since MT blocks scraping
+        print(f"[WARN] MarineTraffic temporarily patched via httpbin for shipid {shipid}")
+        return vf_data
+
+    except Exception as e:
+        print(f"[WARN] MT override failed for IMO {imo}: {e}")
+        return vf_data
 
 def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     """
