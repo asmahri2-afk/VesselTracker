@@ -222,6 +222,7 @@ ALIASES_RAW = {
 
     # GRANADILLA
     "granadilla": "GRANADILLA",
+    "puerto de granadilla": "GRANADILLA",
 
     # ---------------------------
     # SPAIN MAINLAND
