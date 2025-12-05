@@ -15,14 +15,6 @@ from pathlib import Path
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
-SHIPID_MAP_PATH = Path("data/shipid_map.json")
-
-# Optional: small test of redirect + shipid extraction using httpbin
-HTTPBIN_TEST_ENABLED = False  # <- set to True only for testing
-HTTPBIN_TEST_URL = (
-    "https://httpbin.org/redirect-to"
-    "?url=https://www.marinetraffic.com/en/ais/details/ships/shipid:8338267"
-)
 
 # CallMeBot (env secrets in GitHub)
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
@@ -35,7 +27,7 @@ print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
 print("[DEBUG] ETA VERSION ACTIVE")
 
-# Your Render API (VesselFinder-based)
+# Your Render API
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
 # AIS age threshold in minutes (for general info)
@@ -182,7 +174,6 @@ ALIASES_RAW = {
 
     # KENITRA
     "kenitra": "KENITRA",
-    "kenitra": "KENITRA",
 
     # TANGER
     "tanger": "TANGER VILLE",
@@ -259,7 +250,7 @@ ALIASES_RAW = {
 
     # CADIZ
     "cadiz": "CADIZ",
-    "cadiz anch": "CADZ",  # if you add an anch area later
+    "cadiz anch": "CADIZ",  # if you add an anch area later
 
     # SEVILLA
     "sevilla": "SEVILLA",
@@ -398,12 +389,13 @@ def send_whatsapp_message(text: str):
 
 
 # ============================================================
-# SCRAPER – USE YOUR RENDER API (VESSELFINDER DATA)
+# SCRAPER – USE YOUR RENDER API (VESSELFINDER)
 # ============================================================
 
 def fetch_from_render_api(imo: str) -> dict:
     """
     Calls your Render API /vessel-full/{imo} and normalises the result.
+    Source is VesselFinder (through your FastAPI).
     """
     url = f"{RENDER_BASE}/vessel-full/{imo}"
     print(f"[INFO] Fetching from API: {url}")
@@ -443,35 +435,6 @@ def fetch_from_render_api(imo: str) -> dict:
 
 
 # ============================================================
-# OPTIONAL: HTTPBIN REDIRECT TEST (EDUCATIONAL ONLY)
-# ============================================================
-
-def debug_httpbin_redirect_test():
-    """
-    Educational-only test:
-    - Calls httpbin redirect endpoint
-    - Follows redirect
-    - Extracts shipid:xxxx from the final URL
-    Has NO effect on your tracking logic.
-    """
-    print("[DEBUG] Starting httpbin redirect test...")
-    try:
-        # allow_redirects=True by default, but keep explicit
-        resp = requests.get(HTTPBIN_TEST_URL, timeout=15, allow_redirects=True)
-        final_url = resp.url
-        print(f"[DEBUG] httpbin final URL: {final_url}")
-
-        m = re.search(r"shipid:(\d+)", final_url)
-        if m:
-            shipid = m.group(1)
-            print(f"[DEBUG] Extracted shipid from redirect: {shipid}")
-        else:
-            print("[DEBUG] Could not extract shipid from final URL")
-    except Exception as e:
-        print(f"[DEBUG] httpbin test failed: {e}")
-
-
-# ============================================================
 # ALERT LOGIC
 # ============================================================
 
@@ -491,35 +454,7 @@ def humanize_eta(eta_hours: float) -> str:
     if rem_h:
         return f"{days}d {rem_h}h"
     return f"{days}d"
-def override_lat_lon_from_marinetraffic(imo: str, vf_data: dict, shipid_map: dict):
-    """
-    If shipid exists in shipid_map.json, call MarineTraffic JSON endpoint.
-    If MT returns lat/lon successfully, override the VF position.
-    If not found or error → keep original VF data.
-    """
 
-    shipid = shipid_map.get(imo)
-    if not shipid:
-        return vf_data  # nothing to override
-
-    # httpbin patch (MT is blocked by 403)
-    test_url = f"https://httpbin.org/get?shipid={shipid}"
-
-    try:
-        r = requests.get(test_url, timeout=10)
-        r.raise_for_status()
-
-        # Normally you'd call MT like this:
-        # real_url = f"https://www.marinetraffic.com/api/exportvessel/v:5/shipid:{shipid}"
-        # mt_json = requests.get(real_url).json()
-
-        # For now: simulate failure since MT blocks scraping
-        print(f"[WARN] MarineTraffic temporarily patched via httpbin for shipid {shipid}")
-        return vf_data
-
-    except Exception as e:
-        print(f"[WARN] MT override failed for IMO {imo}: {e}")
-        return vf_data
 
 def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
     """
@@ -720,7 +655,7 @@ def main():
 
     # Load tracked IMOs
     imos = load_json(TRACKED_IMOS_PATH, [])
-
+    
     if isinstance(imos, dict) and "tracked_imos" in imos:
         imos = imos.get("tracked_imos", [])
 
@@ -739,24 +674,15 @@ def main():
     if not isinstance(prev_all, dict):
         prev_all = {}
 
-    # Load IMO -> shipid mapping for MarineTraffic overlay
-    shipid_map = load_json(SHIPID_MAP_PATH, {})
-    if not isinstance(shipid_map, dict):
-        shipid_map = {}
-    print(f"[INFO] Loaded shipid_map for {len(shipid_map)} entries.")
-
     new_all = {}
 
     for imo in imos:
         v = fetch_from_render_api(imo)
         if not v:
-            print(f"[WARN] Could not fetch IMO {imo}. Skipping update for this vessel.")
+            print(f"[WARN] Could not scrape IMO {imo}. Skipping update for this vessel.")
             if imo in prev_all:
                 new_all[imo] = prev_all[imo]
             continue
-
-        # Apply MarineTraffic override (currently httpbin test only)
-        v = override_lat_lon_from_marinetraffic(imo, v, shipid_map)
 
         prev_state = prev_all.get(imo)
         alert, new_state = build_alert_and_state(v, ports, prev_state)
