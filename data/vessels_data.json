@@ -5,8 +5,8 @@
     "lat": 24.0,
     "lon": -16.0,
     "sog": 0.1,
-    "cog": 7.0,
-    "last_pos_utc": "Dec 5, 2025 19:48 UTC",
+    "cog": 64.3,
+    "last_pos_utc": "Dec 5, 2025 20:03 UTC",
     "destination": "Dakhla, Morocco",
     "nearest_port": "DAKHLA",
     "nearest_distance_nm": 20.836383281332132,
@@ -15,24 +15,24 @@
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null,
-    "done": false
+    "done": true
   },
   "7325461": {
     "imo": "7325461",
     "name": "DURA BULK",
     "lat": 28.0,
     "lon": -15.0,
-    "sog": 9.2,
-    "cog": 125.3,
-    "last_pos_utc": "Dec 5, 2025 19:49 UTC",
+    "sog": 8.8,
+    "cog": 116.3,
+    "last_pos_utc": "Dec 5, 2025 20:03 UTC",
     "destination": "Laayoune (El Aaiun), Morocco",
     "nearest_port": "LAS PALMAS",
     "nearest_distance_nm": 24.171178344764993,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 98.67846959336578,
-    "eta_hours": 10.725920607974542,
-    "eta_utc": "2025-12-06 06:33:31 UTC",
-    "eta_text": "10h 44m",
+    "eta_hours": 11.213462453791564,
+    "eta_utc": "2025-12-06 07:17:16 UTC",
+    "eta_text": "11h 13m",
     "done": false
   },
   "9409754": {
@@ -40,17 +40,17 @@
     "name": "RUKBAT STAR",
     "lat": 29.0,
     "lon": -10.0,
-    "sog": 6.7,
-    "cog": 222.9,
-    "last_pos_utc": "Dec 5, 2025 19:49 UTC",
+    "sog": 6.0,
+    "cog": 225.1,
+    "last_pos_utc": "Dec 5, 2025 20:03 UTC",
     "destination": "Laayoune (El Aaiun), Morocco",
     "nearest_port": "TAN TAN",
     "nearest_distance_nm": 79.14229214732498,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 215.94025641706932,
-    "eta_hours": 32.229889017473035,
-    "eta_utc": "2025-12-07 04:03:47 UTC",
-    "eta_text": "1d 8h",
+    "eta_hours": 35.99004273617822,
+    "eta_utc": "2025-12-07 08:03:53 UTC",
+    "eta_text": "1d 11h",
     "done": false
   },
   "9427079": {
@@ -60,7 +60,7 @@
     "lon": -13.0,
     "sog": 0.0,
     "cog": 194.0,
-    "last_pos_utc": "Dec 5, 2025 19:42 UTC",
+    "last_pos_utc": "Dec 5, 2025 20:04 UTC",
     "destination": "Puerto de Granadilla, Spain",
     "nearest_port": "LAAYOUNE",
     "nearest_distance_nm": 24.942275804881042,
@@ -69,7 +69,7 @@
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null,
-    "done": false
+    "done": true
   },
   "9501655": {
     "imo": "9501655",
@@ -78,7 +78,7 @@
     "lon": -16.0,
     "sog": 0.0,
     "cog": 148.0,
-    "last_pos_utc": "Dec 5, 2025 19:37 UTC",
+    "last_pos_utc": "Dec 5, 2025 20:04 UTC",
     "destination": "",
     "nearest_port": "GRANADILLA",
     "nearest_distance_nm": 26.408655075539023,
@@ -87,7 +87,7 @@
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null,
-    "done": false
+    "done": true
   },
   "9520132": {
     "imo": "9520132",
@@ -95,8 +95,8 @@
     "lat": 15.0,
     "lon": -17.0,
     "sog": 0.1,
-    "cog": 24.7,
-    "last_pos_utc": "Dec 5, 2025 19:47 UTC",
+    "cog": 15.5,
+    "last_pos_utc": "Dec 5, 2025 19:59 UTC",
     "destination": "",
     "nearest_port": "DAKHLA ANCH",
     "nearest_distance_nm": 519.9725631490234,
@@ -112,17 +112,17 @@
     "name": "ECO STREAM",
     "lat": 36.0,
     "lon": -5.0,
-    "sog": 13.3,
+    "sog": 13.6,
     "cog": 259.1,
-    "last_pos_utc": "Dec 5, 2025 19:49 UTC",
+    "last_pos_utc": "Dec 5, 2025 20:04 UTC",
     "destination": "Gibraltar, Gibraltar",
     "nearest_port": "CEUTA",
     "nearest_distance_nm": 16.43201153294923,
     "destination_port": "GIBRALTAR",
     "destination_distance_nm": 19.0823538669106,
-    "eta_hours": 1.4347634486398948,
-    "eta_utc": "2025-12-05 21:16:08 UTC",
-    "eta_text": "1h 26m",
+    "eta_hours": 1.4031142549198972,
+    "eta_utc": "2025-12-05 21:28:45 UTC",
+    "eta_text": "1h 24m",
     "done": false
   },
   "9841421": {
@@ -130,9 +130,9 @@
     "name": "DING HENG 23",
     "lat": 28.0,
     "lon": -11.0,
-    "sog": 0.1,
-    "cog": 58.9,
-    "last_pos_utc": "Dec 5, 2025 19:48 UTC",
+    "sog": 0.3,
+    "cog": 222.0,
+    "last_pos_utc": "Dec 5, 2025 20:04 UTC",
     "destination": "",
     "nearest_port": "TAN TAN",
     "nearest_distance_nm": 35.42511629909154,
@@ -141,7 +141,7 @@
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null,
-    "done": false
+    "done": true
   },
   "9933913": {
     "imo": "9933913",
@@ -149,8 +149,8 @@
     "lat": 30.0,
     "lon": -10.0,
     "sog": 0.0,
-    "cog": 109.7,
-    "last_pos_utc": "Dec 5, 2025 19:46 UTC",
+    "cog": 154.6,
+    "last_pos_utc": "Dec 5, 2025 19:58 UTC",
     "destination": "Agadir Anch., Morocco",
     "nearest_port": "AGADIR",
     "nearest_distance_nm": 30.148325352341615,
@@ -159,6 +159,6 @@
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null,
-    "done": false
+    "done": true
   }
 }
