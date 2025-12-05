@@ -681,8 +681,71 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
 
 def main():
 
-    # Optional educational test of redirect → shipid extraction
-    if HTTPBIN_TEST_ENABLED:
-        debug_httpbin_redirect_test()
+    # WARM-UP RENDER API (avoid cold-start timeouts)
+    try:
+        print("[INFO] Warming up Render API...")
+        requests.get(f"{RENDER_BASE}/ping", timeout=30)
+        print("[INFO] Render API awake ✔")
+    except Exception as e:
+        print(f"[WARN] Warm-up failed: {e}")
 
-    # WARM-UP RENDER
+    # Load tracked IMOs
+    imos = load_json(TRACKED_IMOS_PATH, [])
+
+    if isinstance(imos, dict) and "tracked_imos" in imos:
+        imos = imos.get("tracked_imos", [])
+
+    if not isinstance(imos, list):
+        imos = []
+
+    imos = [str(i).strip() for i in imos if str(i).strip()]
+    if not imos:
+        print("No IMOs to track.")
+        return
+
+    print("Tracked IMOs:", imos)
+
+    ports = load_ports()
+    prev_all = load_json(VESSELS_STATE_PATH, {})
+    if not isinstance(prev_all, dict):
+        prev_all = {}
+
+    # Load IMO -> shipid mapping for MarineTraffic overlay
+    shipid_map = load_json(SHIPID_MAP_PATH, {})
+    if not isinstance(shipid_map, dict):
+        shipid_map = {}
+    print(f"[INFO] Loaded shipid_map for {len(shipid_map)} entries.")
+
+    new_all = {}
+
+    for imo in imos:
+        v = fetch_from_render_api(imo)
+        if not v:
+            print(f"[WARN] Could not fetch IMO {imo}. Skipping update for this vessel.")
+            if imo in prev_all:
+                new_all[imo] = prev_all[imo]
+            continue
+
+        # Apply MarineTraffic override (currently httpbin test only)
+        v = override_lat_lon_from_marinetraffic(imo, v, shipid_map)
+
+        prev_state = prev_all.get(imo)
+        alert, new_state = build_alert_and_state(v, ports, prev_state)
+        new_all[imo] = new_state
+
+        if alert:
+            print("[ALERT]", alert)
+            send_whatsapp_message(alert)
+
+    print(f"[INFO] Built state for {len(new_all)} vessel(s).")
+    if new_all:
+        save_json(VESSELS_STATE_PATH, new_all)
+        print("Saved vessels_data.json ✔")
+    else:
+        print("[INFO] No valid vessel data, keeping existing vessels_data.json.")
+
+
+# ============================================================
+
+if __name__ == "__main__":
+    main()
