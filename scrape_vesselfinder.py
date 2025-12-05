@@ -122,14 +122,163 @@ def _normalize_text(s: str) -> str:
     return s
 
 
-# Raw aliases as they may appear in VesselFinder destination
 ALIASES_RAW = {
-    # explicit ones you mentioned
+    # ---------------------------
+    # MOROCCO
+    # ---------------------------
+
+    # LAAYOUNE
+    "laayoune": "LAAYOUNE",
+    "layoune": "LAAYOUNE",
+    "eh eun": "LAAYOUNE",   # common AIS form
+    "leyoune": "LAAYOUNE",
+
+    # TAN TAN
     "tantan": "TAN TAN",
-    "tan-tan": "TAN TAN",
     "tan tan": "TAN TAN",
-    "eh eun": "LAAYOUNE",
-    # you can extend this whenever you see new weird forms
+    "tan-tan": "TAN TAN",
+    "tan tan anch": "TAN TAN",   # no separate anch known
+
+    # DAKHLA (PORT)
+    "dakhla": "DAKHLA",
+    "dakhla port": "DAKHLA",
+    "ad dakhla": "DAKHLA",
+
+    # DAKHLA ANCHORAGE
+    "dakhla anch": "DAKHLA ANCH",
+    "dakhla anch.": "DAKHLA ANCH",
+    "dakhla anchorage": "DAKHLA ANCH",
+    "dakhla anch area": "DAKHLA ANCH",
+
+    # AGADIR
+    "agadir": "AGADIR",
+    "port agadir": "AGADIR",
+
+    # ESSAOUIRA
+    "essaouira": "ESSAOUIRA",
+
+    # SAFI
+    "safi": "SAFI",
+
+    # CASABLANCA
+    "casa": "CASABLANCA",           # AIS often uses CASA
+    "casablanca": "CASABLANCA",
+    "cassablanca": "CASABLANCA",
+
+    # MOHAMMEDIA
+    "mohammedia": "MOHAMMEDIA",
+
+    # JORF
+    "jorf": "JORF LASFAR",
+    "jorf lasfar": "JORF LASFAR",
+
+    # KENITRA
+    "kenitra": "KENITRA",
+    "kenitra": "KENITRA",
+
+    # TANGER
+    "tanger": "TANGER VILLE",
+    "tangier": "TANGER VILLE",
+    "tanger ville": "TANGER VILLE",
+    "tanger med": "TANGER MED",
+    "tm2": "TANGER MED",
+
+    # NADOR
+    "nador": "NADOR",
+
+    # AL HOCEIMA
+    "al hoceima": "AL HOCEIMA",
+    "alhucemas": "AL HOCEIMA",  # Spanish form
+
+    # ---------------------------
+    # CANARY ISLANDS
+    # ---------------------------
+
+    # LAS PALMAS
+    "las palmas": "LAS PALMAS",
+    "lpa": "LAS PALMAS",
+    "las palmas anch": "LAS PALMAS",
+
+    # ARRECIFE
+    "arrecife": "ARRECIFE",
+
+    # PUERTO DEL ROSARIO
+    "puerto del rosario": "PUERTO DEL ROSARIO",
+    "pdr": "PUERTO DEL ROSARIO",
+
+    # SANTA CRUZ TENERIFE
+    "santa cruz": "SANTA CRUZ DE TENERIFE",
+    "sctf": "SANTA CRUZ DE TENERIFE",
+    "santa cruz tenerife": "SANTA CRUZ DE TENERIFE",
+
+    # LA GOMERA
+    "san sebastian": "SAN SEBASTIAN DE LA GOMERA",
+
+    # EL HIERRO
+    "la restinga": "LA RESTINGA",
+
+    # LA PALMA
+    "la palma": "LA PALMA",
+
+    # GRANADILLA
+    "granadilla": "GRANADILLA",
+
+    # ---------------------------
+    # SPAIN MAINLAND
+    # ---------------------------
+
+    # CEUTA
+    "ceuta": "CEUTA",
+
+    # MELILLA
+    "melilla": "MELILLA",
+
+    # ALGECIRAS
+    "algeciras": "ALGECIRAS",
+    "alg": "ALGECIRAS",
+
+    # GIBRALTAR
+    "gibraltar": "GIBRALTAR",
+    "gib": "GIBRALTAR",
+
+    # HUELVA (PORT)
+    "huelva": "HUELVA",
+
+    # HUELVA ANCH
+    "huelva anch": "HUELVA ANCH",
+    "huelva anchorage": "HUELVA ANCH",
+
+    # CADIZ
+    "cadiz": "CADIZ",
+    "cadiz anch": "CADZ",  # if you add an anch area later
+
+    # SEVILLA
+    "sevilla": "SEVILLA",
+    "seville": "SEVILLA",
+
+    # MALAGA
+    "malaga": "MALAGA",
+
+    # MOTRIL
+    "motril": "MOTRIL",
+
+    # ALMERIA
+    "almeria": "ALMERIA",
+
+    # CARTAGENA
+    "cartagena": "CARTAGENA",
+
+    # VALENCIA
+    "valencia": "VALENCIA",
+
+    # ---------------------------
+    # PORTUGAL
+    # ---------------------------
+
+    "sines": "SINES",
+    "setubal": "SETUBAL",
+    "lisbon": "LISBON",
+    "lisboa": "LISBON"
 }
 
 # Normalized aliases map
