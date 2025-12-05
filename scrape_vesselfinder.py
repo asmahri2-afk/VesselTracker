@@ -4,6 +4,7 @@ import os
 import re
 import requests
 import requests.utils
+import unicodedata
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -75,14 +76,12 @@ def save_json(path: Path, data):
 def haversine_nm(lat1, lon1, lat2, lon2) -> float:
     """
     Great-circle distance in nautical miles.
-    
-    CRITICAL FIX: Corrected lon2_r calculation to use lon2 instead of lat2.
     """
     R_km = 6371.0  # Earth radius in kilometers
     lat1_r = math.radians(lat1)
     lon1_r = math.radians(lon1)
     lat2_r = math.radians(lat2)
-    lon2_r = math.radians(lon2)  # <<< FIX: Must use lon2 here
+    lon2_r = math.radians(lon2)
 
     dlat = lat2_r - lat1_r
     dlon = lon2_r - lon1_r
@@ -94,7 +93,7 @@ def haversine_nm(lat1, lon1, lat2, lon2) -> float:
 
 
 # ============================================================
-# PORTS
+# PORTS + DESTINATION NORMALIZATION
 # ============================================================
 
 def load_ports() -> dict:
@@ -105,7 +104,6 @@ def load_ports() -> dict:
     if ports:
         return {k.upper(): v for k, v in ports.items()}
 
-    # Fallback if ports.json is missing
     print("[WARN] Using hardcoded fallback ports.")
     return {
         "LAAYOUNE": {"lat": 27.1536, "lon": -13.2033},
@@ -113,6 +111,69 @@ def load_ports() -> dict:
         "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
         "DAKHLA": {"lat": 23.7048, "lon": -15.9336},
     }
+
+
+def _normalize_text(s: str) -> str:
+    """
+    Uppercase, remove accents, remove non-letters (spaces, dashes, dots…).
+    Use this for BOTH ports.json keys and raw destinations.
+    """
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = s.upper()
+    s = re.sub(r"[^A-Z]", "", s)
+    return s
+
+
+# Raw aliases as they may appear in VesselFinder destination
+ALIASES_RAW = {
+    # explicit ones you mentioned
+    "tantan": "TAN TAN",
+    "tan-tan": "TAN TAN",
+    "tan tan": "TAN TAN",
+    "eh eun": "LAAYOUNE",
+    # you can extend this whenever you see new weird forms
+}
+
+# Normalized aliases map
+DEST_ALIASES = {
+    _normalize_text(raw): canonical
+    for raw, canonical in ALIASES_RAW.items()
+}
+
+
+def match_destination_port(destination: str, ports: dict):
+    """
+    Try to match destination string (e.g. 'TanTan', 'EH EUN', 'Las Palmas anch')
+    to a port in the known ports dictionary.
+    Returns (port_name, coords_dict) or (None, None).
+    """
+    if not destination:
+        return None, None
+
+    norm_dest = _normalize_text(destination)
+
+    # 1) Exact alias match (covers 'tantan', 'EH EUN', etc.)
+    if norm_dest in DEST_ALIASES:
+        canonical_name = DEST_ALIASES[norm_dest]
+        return canonical_name, ports.get(canonical_name)
+
+    # Build canonical map for ports.json keys
+    canonical_map = {_normalize_text(p): p for p in ports.keys()}
+
+    # 2) Exact canonical match (e.g. "LAAYOUNE", "TANTAN" normalized)
+    if norm_dest in canonical_map:
+        name = canonical_map[norm_dest]
+        return name, ports.get(name)
+
+    # 3) Substring/fuzzy: handle 'LASPALMASANCH', 'HUELVAANCH', etc.
+    for canon, name in canonical_map.items():
+        if canon and canon in norm_dest:
+            return name, ports.get(name)
+
+    return None, None
 
 
 def nearest_port(lat: float, lon: float, ports: dict):
@@ -138,8 +199,6 @@ def parse_ais_time(s: str) -> datetime | None:
     if not s:
         return None
     s = s.strip()
-
-    # Remove ' UTC' to parse the format cleanly without relying on %Z
     s_cleaned = s.replace(' UTC', '').strip()
 
     try:
@@ -234,22 +293,6 @@ def fetch_from_render_api(imo: str) -> dict:
 # ALERT LOGIC
 # ============================================================
 
-def match_destination_port(destination: str, ports: dict):
-    """
-    Try to match destination string (e.g. 'Tan Tan, Morocco')
-    to a port in the known ports dictionary. Returns (port_name, coords_dict) or (None, None).
-    """
-    if not destination:
-        return None, None
-
-    dest_up = destination.upper()
-    for port_name, info in ports.items():
-        if port_name in dest_up:
-            return port_name, info
-
-    return None, None
-
-
 def humanize_eta(eta_hours: float) -> str:
     """Turn ETA in hours into a short 'Xd Yh' / 'Xh Ym' text."""
     total_minutes = int(round(eta_hours * 60))
@@ -320,7 +363,6 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
         and sog >= MIN_SOG_FOR_ETA
         and not too_old_for_eta
     ):
-        # Clamp SOG to avoid nonsense (negative or crazy spikes)
         effective_sog = min(max(sog, MIN_SOG_FOR_ETA), MAX_ETA_SOG_CAP)
 
         try:
