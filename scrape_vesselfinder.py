@@ -15,7 +15,6 @@ from pathlib import Path
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
-SHIPID_MAP_PATH = Path("data/shipid_map.json")
 
 # CallMeBot (env secrets in GitHub)
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
@@ -28,7 +27,7 @@ print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
 print("[DEBUG] ETA VERSION ACTIVE")
 
-# Your Render API
+# Your Render API (VesselFinder proxy)
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
 # AIS age threshold in minutes (for general info)
@@ -301,7 +300,7 @@ def match_destination_port(destination: str, ports: dict):
 
     norm_dest = _normalize_text(destination)
 
-    # 1) Exact alias match (covers 'tantan', 'EH EUN', etc.)
+    # 1) Exact alias match
     if norm_dest in DEST_ALIASES:
         canonical_name = DEST_ALIASES[norm_dest]
         return canonical_name, ports.get(canonical_name)
@@ -309,7 +308,7 @@ def match_destination_port(destination: str, ports: dict):
     # Build canonical map for ports.json keys
     canonical_map = {_normalize_text(p): p for p in ports.keys()}
 
-    # 2) Exact canonical match (e.g. "LAAYOUNE", "TANTAN" normalized)
+    # 2) Exact canonical match
     if norm_dest in canonical_map:
         name = canonical_map[norm_dest]
         return name, ports.get(name)
@@ -391,13 +390,13 @@ def send_whatsapp_message(text: str):
 
 
 # ============================================================
-# SCRAPERS
+# SCRAPER – USE YOUR RENDER API (VESSELFINDER)
 # ============================================================
 
 def fetch_from_render_api(imo: str) -> dict:
     """
-    Calls your Render API /vessel-full/{imo} and normalises the result.
-    This is your VesselFinder-based source.
+    Calls your Render API /vessel-full/{imo} (backed by VesselFinder)
+    and normalises the result.
     """
     url = f"{RENDER_BASE}/vessel-full/{imo}"
     print(f"[INFO] Fetching from API: {url}")
@@ -434,83 +433,6 @@ def fetch_from_render_api(imo: str) -> dict:
         "last_pos_utc": data.get("last_pos_utc"),
         "destination": destination,
     }
-
-
-def load_shipid_map() -> dict:
-    """
-    Load IMO -> shipId map from data/shipid_map.json.
-    Keys in JSON are expected as IMO strings ("9841421": 8338267, ...).
-    """
-    raw = load_json(SHIPID_MAP_PATH, {})
-    if not isinstance(raw, dict):
-        return {}
-    # Normalize keys to strings
-    return {str(k).strip(): v for k, v in raw.items() if str(k).strip()}
-
-
-def override_lat_lon_from_marinetraffic(imo: str, vessel_data: dict, shipid_map: dict) -> dict:
-    """
-    If a MarineTraffic shipId is known for this IMO (via shipid_map),
-    call MT JSON position endpoint and override ONLY lat/lon.
-
-    URL: https://www.marinetraffic.com/en/vessels/{shipid}/position
-
-    If anything fails or shipId not found, returns vessel_data unchanged.
-    """
-    shipid = shipid_map.get(str(imo))
-    if not shipid:
-        # No mapping for this IMO -> keep VF data
-        return vessel_data
-
-    url = f"https://www.marinetraffic.com/en/vessels/{shipid}/position"
-    print(f"[INFO] Fetching MT position for IMO {imo} / shipId {shipid}: {url}")
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit(537.36) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json,text/plain,*/*",
-        "Referer": f"https://www.marinetraffic.com/en/ais/details/ships/shipid:{shipid}",
-    }
-
-    try:
-        r = requests.get(url, headers=headers, timeout=30)
-        r.raise_for_status()
-        data = r.json()
-    except Exception as e:
-        print(f"[WARN] MT position fetch failed for IMO {imo}: {e}")
-        return vessel_data
-
-    mt_lat = data.get("lat")
-    mt_lon = data.get("lon")
-
-    if mt_lat is None or mt_lon is None:
-        print(f"[WARN] MT position missing lat/lon for IMO {imo}, keeping VF coords.")
-        return vessel_data
-
-    try:
-        mt_lat = float(mt_lat)
-        mt_lon = float(mt_lon)
-    except Exception:
-        print(f"[WARN] MT lat/lon not numeric for IMO {imo}, keeping VF coords.")
-        return vessel_data
-
-    old_lat = vessel_data.get("lat")
-    old_lon = vessel_data.get("lon")
-
-    print(
-        f"[INFO] Overriding lat/lon for IMO {imo}: "
-        f"VF({old_lat}, {old_lon}) -> MT({mt_lat}, {mt_lon})"
-    )
-
-    v2 = dict(vessel_data)
-    v2["lat"] = mt_lat
-    v2["lon"] = mt_lon
-
-    # sog/cog/last_pos_utc/destination stay from VF
-    return v2
 
 
 # ============================================================
@@ -734,7 +656,6 @@ def main():
 
     # Load tracked IMOs
     imos = load_json(TRACKED_IMOS_PATH, [])
-    
     if isinstance(imos, dict) and "tracked_imos" in imos:
         imos = imos.get("tracked_imos", [])
 
@@ -749,8 +670,6 @@ def main():
     print("Tracked IMOs:", imos)
 
     ports = load_ports()
-    shipid_map = load_shipid_map()
-
     prev_all = load_json(VESSELS_STATE_PATH, {})
     if not isinstance(prev_all, dict):
         prev_all = {}
@@ -758,18 +677,15 @@ def main():
     new_all = {}
 
     for imo in imos:
-        # 1) Get VF data via your API
+        # 1️⃣ Get data from your Render API (VesselFinder)
         v = fetch_from_render_api(imo)
         if not v:
-            print(f"[WARN] Could not fetch VF data for IMO {imo}. Skipping update for this vessel.")
+            print(f"[WARN] Could not scrape IMO {imo}. Skipping update for this vessel.")
             if imo in prev_all:
                 new_all[imo] = prev_all[imo]
             continue
 
-        # 2) Override ONLY lat/lon from MarineTraffic if shipid exists and call succeeds
-        v = override_lat_lon_from_marinetraffic(imo, v, shipid_map)
-
-        # 3) Build alert + state as usual
+        # 2️⃣ Build alert + state
         prev_state = prev_all.get(imo)
         alert, new_state = build_alert_and_state(v, ports, prev_state)
         new_all[imo] = new_state
