@@ -15,6 +15,7 @@ from pathlib import Path
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
+SHIPID_MAP_PATH = Path("data/shipid_map.json")
 
 # Optional: small test of redirect + shipid extraction using httpbin
 HTTPBIN_TEST_ENABLED = False  # <- set to True only for testing
