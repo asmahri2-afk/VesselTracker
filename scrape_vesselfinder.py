@@ -15,6 +15,7 @@ from pathlib import Path
 TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
+SHIPID_MAP_PATH = Path("data/shipid_map.json")
 
 # CallMeBot (env secrets in GitHub)
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
@@ -27,14 +28,14 @@ print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
 print("[DEBUG] ETA VERSION ACTIVE")
 
-# Your Render API (VesselFinder data)
+# Your Render API
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
 # AIS age threshold in minutes (for general info)
 MAX_AIS_MINUTES = 30
 
 # Distance threshold (NM) to consider “arrived” at destination
-ARRIVAL_RADIUS_NM = 5.0
+ARRIVAL_RADIUS_NM = 35.5
 
 # Min movement (NM) to consider course/pos “changed”
 MIN_MOVE_NM = 5.0
@@ -45,22 +46,6 @@ MAX_ETA_HOURS = 240          # ignore ETA if > 10 days
 MAX_ETA_SOG_CAP = 18.0       # cap extreme AIS spikes
 MAX_AIS_FOR_ETA_MIN = 360    # if AIS older than 6h, skip ETA
 MIN_DISTANCE_FOR_ETA = 5.0   # NM, if closer than this, skip ETA
-
-# MarineTraffic headers
-MT_HTML_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
-
-MT_HEADERS = {
-    "User-Agent": MT_HTML_HEADERS["User-Agent"],
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "application/json",
-}
 
 
 # ============================================================
@@ -406,80 +391,13 @@ def send_whatsapp_message(text: str):
 
 
 # ============================================================
-# MARINETRAFFIC ENRICHMENT
-# ============================================================
-
-def get_mt_shipid_from_imo(imo: str) -> str | None:
-    """
-    Use MarineTraffic redirect behaviour:
-    https://www.marinetraffic.com/en/ais/details/ships/imo:{imo}
-    → .../ships/shipid:8338267/mmsi:...
-
-    Returns shipid as string or None.
-    """
-    url = f"https://www.marinetraffic.com/en/ais/details/ships/imo:{imo}"
-    try:
-        r = requests.get(url, headers=MT_HTML_HEADERS, timeout=30)
-        r.raise_for_status()
-    except Exception as e:
-        print(f"[WARN] MarineTraffic shipid lookup failed for IMO {imo}: {e}")
-        return None
-
-    final_url = r.url
-    m = re.search(r"shipid:(\d+)", final_url)
-    if not m:
-        print(f"[WARN] Could not extract shipid from MarineTraffic URL for IMO {imo}: {final_url}")
-        return None
-
-    shipid = m.group(1)
-    print(f"[INFO] MarineTraffic shipid for IMO {imo}: {shipid}")
-    return shipid
-
-
-def get_mt_coords_by_shipid(shipid: str) -> tuple[float, float] | None:
-    """
-    Calls https://www.marinetraffic.com/en/vessels/{shipid}/position
-    and extracts lat/lon.
-    """
-    url = f"https://www.marinetraffic.com/en/vessels/{shipid}/position"
-    try:
-        r = requests.get(url, headers=MT_HEADERS, timeout=30)
-        r.raise_for_status()
-    except Exception as e:
-        print(f"[WARN] MarineTraffic /position failed for shipid {shipid}: {e}")
-        return None
-
-    try:
-        data = r.json()
-    except Exception as e:
-        print(f"[WARN] MarineTraffic /position JSON error for shipid {shipid}: {e}")
-        return None
-
-    lat = data.get("lat")
-    lon = data.get("lon")
-
-    if lat is None or lon is None:
-        print(f"[WARN] MarineTraffic /position has no lat/lon for shipid {shipid}")
-        return None
-
-    try:
-        flat = float(lat)
-        flon = float(lon)
-    except ValueError:
-        print(f"[WARN] Invalid lat/lon from MarineTraffic /position for shipid {shipid}: {lat}, {lon}")
-        return None
-
-    print(f"[INFO] MarineTraffic /position shipid {shipid}: {flat}, {flon}")
-    return flat, flon
-
-
-# ============================================================
-# SCRAPER – USE YOUR RENDER API (VESSELFINDER)
+# SCRAPERS
 # ============================================================
 
 def fetch_from_render_api(imo: str) -> dict:
     """
     Calls your Render API /vessel-full/{imo} and normalises the result.
+    This is your VesselFinder-based source.
     """
     url = f"{RENDER_BASE}/vessel-full/{imo}"
     print(f"[INFO] Fetching from API: {url}")
@@ -516,6 +434,83 @@ def fetch_from_render_api(imo: str) -> dict:
         "last_pos_utc": data.get("last_pos_utc"),
         "destination": destination,
     }
+
+
+def load_shipid_map() -> dict:
+    """
+    Load IMO -> shipId map from data/shipid_map.json.
+    Keys in JSON are expected as IMO strings ("9841421": 8338267, ...).
+    """
+    raw = load_json(SHIPID_MAP_PATH, {})
+    if not isinstance(raw, dict):
+        return {}
+    # Normalize keys to strings
+    return {str(k).strip(): v for k, v in raw.items() if str(k).strip()}
+
+
+def override_lat_lon_from_marinetraffic(imo: str, vessel_data: dict, shipid_map: dict) -> dict:
+    """
+    If a MarineTraffic shipId is known for this IMO (via shipid_map),
+    call MT JSON position endpoint and override ONLY lat/lon.
+
+    URL: https://www.marinetraffic.com/en/vessels/{shipid}/position
+
+    If anything fails or shipId not found, returns vessel_data unchanged.
+    """
+    shipid = shipid_map.get(str(imo))
+    if not shipid:
+        # No mapping for this IMO -> keep VF data
+        return vessel_data
+
+    url = f"https://www.marinetraffic.com/en/vessels/{shipid}/position"
+    print(f"[INFO] Fetching MT position for IMO {imo} / shipId {shipid}: {url}")
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit(537.36) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": f"https://www.marinetraffic.com/en/ais/details/ships/shipid:{shipid}",
+    }
+
+    try:
+        r = requests.get(url, headers=headers, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print(f"[WARN] MT position fetch failed for IMO {imo}: {e}")
+        return vessel_data
+
+    mt_lat = data.get("lat")
+    mt_lon = data.get("lon")
+
+    if mt_lat is None or mt_lon is None:
+        print(f"[WARN] MT position missing lat/lon for IMO {imo}, keeping VF coords.")
+        return vessel_data
+
+    try:
+        mt_lat = float(mt_lat)
+        mt_lon = float(mt_lon)
+    except Exception:
+        print(f"[WARN] MT lat/lon not numeric for IMO {imo}, keeping VF coords.")
+        return vessel_data
+
+    old_lat = vessel_data.get("lat")
+    old_lon = vessel_data.get("lon")
+
+    print(
+        f"[INFO] Overriding lat/lon for IMO {imo}: "
+        f"VF({old_lat}, {old_lon}) -> MT({mt_lat}, {mt_lon})"
+    )
+
+    v2 = dict(vessel_data)
+    v2["lat"] = mt_lat
+    v2["lon"] = mt_lon
+
+    # sog/cog/last_pos_utc/destination stay from VF
+    return v2
 
 
 # ============================================================
@@ -754,6 +749,8 @@ def main():
     print("Tracked IMOs:", imos)
 
     ports = load_ports()
+    shipid_map = load_shipid_map()
+
     prev_all = load_json(VESSELS_STATE_PATH, {})
     if not isinstance(prev_all, dict):
         prev_all = {}
@@ -761,36 +758,18 @@ def main():
     new_all = {}
 
     for imo in imos:
-        # 1) Try to get better lat/lon from MarineTraffic
-        mt_coords = None
-        try:
-            shipid = get_mt_shipid_from_imo(imo)
-            if shipid:
-                mt_coords = get_mt_coords_by_shipid(shipid)
-        except Exception as e:
-            print(f"[WARN] MT enrichment failed for IMO {imo}: {e}")
-
-        # 2) Base data from Render (VesselFinder)
+        # 1) Get VF data via your API
         v = fetch_from_render_api(imo)
         if not v:
-            print(f"[WARN] Could not scrape IMO {imo}. Skipping update for this vessel.")
+            print(f"[WARN] Could not fetch VF data for IMO {imo}. Skipping update for this vessel.")
             if imo in prev_all:
                 new_all[imo] = prev_all[imo]
             continue
 
-        # 3) If we have MT coords, override only lat/lon
-        if mt_coords:
-            mt_lat, mt_lon = mt_coords
-            old_lat = v.get("lat")
-            old_lon = v.get("lon")
-            v["lat"] = mt_lat
-            v["lon"] = mt_lon
-            print(
-                f"[INFO] IMO {imo}: VF coords {old_lat}, {old_lon} "
-                f"→ MT coords {mt_lat}, {mt_lon}"
-            )
+        # 2) Override ONLY lat/lon from MarineTraffic if shipid exists and call succeeds
+        v = override_lat_lon_from_marinetraffic(imo, v, shipid_map)
 
-        # 4) Build state + alerts as usual
+        # 3) Build alert + state as usual
         prev_state = prev_all.get(imo)
         alert, new_state = build_alert_and_state(v, ports, prev_state)
         new_all[imo] = new_state
