@@ -16,6 +16,13 @@ TRACKED_IMOS_PATH = Path("data/tracked_imos.json")
 VESSELS_STATE_PATH = Path("data/vessels_data.json")
 PORTS_PATH = Path("data/ports.json")
 
+# Optional: small test of redirect + shipid extraction using httpbin
+HTTPBIN_TEST_ENABLED = False  # <- set to True only for testing
+HTTPBIN_TEST_URL = (
+    "https://httpbin.org/redirect-to"
+    "?url=https://www.marinetraffic.com/en/ais/details/ships/shipid:8338267"
+)
+
 # CallMeBot (env secrets in GitHub)
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE")
 CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY")
@@ -27,7 +34,7 @@ print(f"[DEBUG] CALLMEBOT_APIKEY: {'SET' if CALLMEBOT_APIKEY else 'MISSING'}")
 print(f"[DEBUG] CALLMEBOT_ENABLED: {CALLMEBOT_ENABLED}")
 print("[DEBUG] ETA VERSION ACTIVE")
 
-# Your Render API (VesselFinder proxy)
+# Your Render API (VesselFinder-based)
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
 # AIS age threshold in minutes (for general info)
@@ -300,7 +307,7 @@ def match_destination_port(destination: str, ports: dict):
 
     norm_dest = _normalize_text(destination)
 
-    # 1) Exact alias match
+    # 1) Exact alias match (covers 'tantan', 'EH EUN', etc.)
     if norm_dest in DEST_ALIASES:
         canonical_name = DEST_ALIASES[norm_dest]
         return canonical_name, ports.get(canonical_name)
@@ -308,7 +315,7 @@ def match_destination_port(destination: str, ports: dict):
     # Build canonical map for ports.json keys
     canonical_map = {_normalize_text(p): p for p in ports.keys()}
 
-    # 2) Exact canonical match
+    # 2) Exact canonical match (e.g. "LAAYOUNE", "TANTAN" normalized)
     if norm_dest in canonical_map:
         name = canonical_map[norm_dest]
         return name, ports.get(name)
@@ -390,13 +397,12 @@ def send_whatsapp_message(text: str):
 
 
 # ============================================================
-# SCRAPER – USE YOUR RENDER API (VESSELFINDER)
+# SCRAPER – USE YOUR RENDER API (VESSELFINDER DATA)
 # ============================================================
 
 def fetch_from_render_api(imo: str) -> dict:
     """
-    Calls your Render API /vessel-full/{imo} (backed by VesselFinder)
-    and normalises the result.
+    Calls your Render API /vessel-full/{imo} and normalises the result.
     """
     url = f"{RENDER_BASE}/vessel-full/{imo}"
     print(f"[INFO] Fetching from API: {url}")
@@ -433,6 +439,35 @@ def fetch_from_render_api(imo: str) -> dict:
         "last_pos_utc": data.get("last_pos_utc"),
         "destination": destination,
     }
+
+
+# ============================================================
+# OPTIONAL: HTTPBIN REDIRECT TEST (EDUCATIONAL ONLY)
+# ============================================================
+
+def debug_httpbin_redirect_test():
+    """
+    Educational-only test:
+    - Calls httpbin redirect endpoint
+    - Follows redirect
+    - Extracts shipid:xxxx from the final URL
+    Has NO effect on your tracking logic.
+    """
+    print("[DEBUG] Starting httpbin redirect test...")
+    try:
+        # allow_redirects=True by default, but keep explicit
+        resp = requests.get(HTTPBIN_TEST_URL, timeout=15, allow_redirects=True)
+        final_url = resp.url
+        print(f"[DEBUG] httpbin final URL: {final_url}")
+
+        m = re.search(r"shipid:(\d+)", final_url)
+        if m:
+            shipid = m.group(1)
+            print(f"[DEBUG] Extracted shipid from redirect: {shipid}")
+        else:
+            print("[DEBUG] Could not extract shipid from final URL")
+    except Exception as e:
+        print(f"[DEBUG] httpbin test failed: {e}")
 
 
 # ============================================================
@@ -646,63 +681,8 @@ def build_alert_and_state(v: dict, ports: dict, prev_state: dict | None):
 
 def main():
 
-    # WARM-UP RENDER API (avoid cold-start timeouts)
-    try:
-        print("[INFO] Warming up Render API...")
-        requests.get(f"{RENDER_BASE}/ping", timeout=30)
-        print("[INFO] Render API awake ✔")
-    except Exception as e:
-        print(f"[WARN] Warm-up failed: {e}")
+    # Optional educational test of redirect → shipid extraction
+    if HTTPBIN_TEST_ENABLED:
+        debug_httpbin_redirect_test()
 
-    # Load tracked IMOs
-    imos = load_json(TRACKED_IMOS_PATH, [])
-    if isinstance(imos, dict) and "tracked_imos" in imos:
-        imos = imos.get("tracked_imos", [])
-
-    if not isinstance(imos, list):
-        imos = []
-
-    imos = [str(i).strip() for i in imos if str(i).strip()]
-    if not imos:
-        print("No IMOs to track.")
-        return
-
-    print("Tracked IMOs:", imos)
-
-    ports = load_ports()
-    prev_all = load_json(VESSELS_STATE_PATH, {})
-    if not isinstance(prev_all, dict):
-        prev_all = {}
-
-    new_all = {}
-
-    for imo in imos:
-        # 1️⃣ Get data from your Render API (VesselFinder)
-        v = fetch_from_render_api(imo)
-        if not v:
-            print(f"[WARN] Could not scrape IMO {imo}. Skipping update for this vessel.")
-            if imo in prev_all:
-                new_all[imo] = prev_all[imo]
-            continue
-
-        # 2️⃣ Build alert + state
-        prev_state = prev_all.get(imo)
-        alert, new_state = build_alert_and_state(v, ports, prev_state)
-        new_all[imo] = new_state
-
-        if alert:
-            print("[ALERT]", alert)
-            send_whatsapp_message(alert)
-
-    print(f"[INFO] Built state for {len(new_all)} vessel(s).")
-    if new_all:
-        save_json(VESSELS_STATE_PATH, new_all)
-        print("Saved vessels_data.json ✔")
-    else:
-        print("[INFO] No valid vessel data, keeping existing vessels_data.json.")
-
-
-# ============================================================
-
-if __name__ == "__main__":
-    main()
+    # WARM-UP RENDER
