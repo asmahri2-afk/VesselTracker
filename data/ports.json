@@ -1,6 +1,6 @@
 {
   "LAAYOUNE": {"lat": 27.092036, "lon": -13.454842},
-  "TAN TAN": {"lat": 28.4927, "lon": -11.3437},
+  "TAN TAN": {"lat": 28.483825, "lon": -11.383329},
   "TARFAYA": {"lat": 27.9373, "lon": -12.9221},
   "DAKHLA": {"lat": 23.60022, "lon": -16.075354},
   "AGADIR": {"lat": 30.4180, "lon": -9.5980},
@@ -22,7 +22,7 @@
   "SAN SEBASTIAN DE LA GOMERA": {"lat": 28.0878, "lon": -17.1060},
   "LA PALMA": {"lat": 28.6500, "lon": -17.7700},
   "LA RESTINGA": {"lat": 27.6320, "lon": -17.9750},
-  "GRANADILLA": { "lat": 28.0458, "lon": -16.5540 },
+  "GRANADILLA": { "lat": 28.07289, "lon": -16.491437 },
 
   "CEUTA": {"lat": 35.8890, "lon": -5.3090},
   "MELILLA": {"lat": 35.2890, "lon": -2.9470},
