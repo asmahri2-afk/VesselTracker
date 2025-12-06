@@ -130,15 +130,26 @@ def fetch_from_render_api(imo):
     except:return{}
     if d.get("found") is False:return{}
     if d.get("lat") is None or d.get("lon") is None:return{}
+    
+    # 🚢 MODIFIED: Collect all required static and dynamic data fields
     return{
         "imo":imo,
-        "name":(d.get("name")or f"IMO {imo}").strip(),
+        "name":(d.get("vessel_name") or d.get("name") or f"IMO {imo}").strip(),
         "lat":float(d.get("lat")),
         "lon":float(d.get("lon")),
         "sog":float(d.get("sog")or 0.0),
         "cog":float(d.get("cog")or 0.0),
         "last_pos_utc":d.get("last_pos_utc"),
-        "destination":(d.get("destination")or"").strip()
+        "destination":(d.get("destination")or"").strip(),
+        
+        # NEW STATIC SPECIFICATIONS
+        "ship_type": (d.get("ship_type") or "").strip(),
+        "flag": (d.get("flag") or "").strip(),
+        "deadweight_t": d.get("deadweight_t"),
+        "gross_tonnage": d.get("gross_tonnage"),
+        "year_of_build": d.get("year_of_build"),
+        "length_overall_m": d.get("length_overall_m"),
+        "beam_m": d.get("beam_m"),
     }
 
 def humanize_eta(h):
@@ -148,7 +159,18 @@ def humanize_eta(h):
     return f"{d}d {r}h" if r else f"{d}d"
 
 def build_alert_and_state(v,ports,prev):
+    # Unpack existing tracking fields
     imo=v["imo"];name=v.get("name");lat=v["lat"];lon=v["lon"];sog=v["sog"];cog=v["cog"];last=v.get("last_pos_utc");dest=v["destination"]
+    
+    # NEW: Unpack the new static fields from the 'v' dictionary
+    ship_type = v.get("ship_type")
+    flag = v.get("flag")
+    dwt = v.get("deadweight_t")
+    gt = v.get("gross_tonnage")
+    year = v.get("year_of_build")
+    length = v.get("length_overall_m")
+    beam = v.get("beam_m")
+    
     age=age_minutes(last) if last else None
     age_txt="N/A" if age is None else f"{age:.0f} min ago"
     too_old=age is not None and age>MAX_AIS_FOR_ETA_MIN
@@ -169,14 +191,28 @@ def build_alert_and_state(v,ports,prev):
             eta_dt=datetime.now(timezone.utc)+timedelta(hours=eta_h)
             eta_str=eta_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
             eta_text=humanize_eta(eta_h)
+            
+    # 🚢 MODIFIED: Include all new static fields in the state dictionary
     new_state={
         "imo":imo,"name":name,"lat":lat,"lon":lon,"sog":sog,"cog":cog,"last_pos_utc":last,
         "destination":dest,"nearest_port":nearest,"nearest_distance_nm":nmd,
         "destination_port":dest_name,"destination_distance_nm":dest_nm,
-        "eta_hours":eta_h,"eta_utc":eta_str,"eta_text":eta_text,"done":False
+        "eta_hours":eta_h,"eta_utc":eta_str,"eta_text":eta_text,"done":False,
+        
+        # STATIC SPECIFICATIONS SAVED TO JSON
+        "ship_type": ship_type,
+        "flag": flag,
+        "deadweight_t": dwt,
+        "gross_tonnage": gt,
+        "year_of_build": year,
+        "length_overall_m": length,
+        "beam_m": beam,
     }
+    
     arrived=nmd is not None and nmd<=ARRIVAL_RADIUS_NM and sog<=0.5
     if arrived:new_state["done"]=True
+    
+    # ⚠️ WhatsApp Alert Logic (No changes made to the content of 'msg' to exclude static fields)
     if not prev:
         msg=[
             f"🚢 {name} (IMO {imo})",
@@ -190,6 +226,7 @@ def build_alert_and_state(v,ports,prev):
         if dest_name and dest_nm is not None:msg[-1]+=f" (~{dest_nm:.1f} NM)"
         if eta_text:msg.append(f"⏱ ETA: {eta_text} ({eta_str})")
         return"\n".join(msg),new_state
+    
     if prev.get("done"):return None,new_state
     old_dest=(prev.get("destination")or"").strip()
     changed=(old_dest.upper()!=dest.upper()) if (old_dest or dest) else False
