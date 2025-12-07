@@ -87,6 +87,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9841421": {
+    "imo": "9841421",
+    "name": "DING HENG 23",
+    "flag": "Hong Kong",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "120.00",
+    "beam_m": "19.00",
+    "deadweight_t": "9014",
+    "gross_tonnage": "6205",
+    "year_of_build": "2024"
+  },
   "9933913": {
     "imo": "9933913",
     "name": "CHALLAH",
