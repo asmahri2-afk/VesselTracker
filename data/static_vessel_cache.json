@@ -31,5 +31,16 @@
     "deadweight_t": "58518",
     "gross_tonnage": "34837",
     "year_of_build": "2012"
+  },
+  "9933913": {
+    "imo": "9933913",
+    "name": "CHALLAH",
+    "flag": "Morocco",
+    "ship_type": "Oil Products Tanker",
+    "length_overall_m": "117.53",
+    "beam_m": "19.50",
+    "deadweight_t": "9137",
+    "gross_tonnage": "6822",
+    "year_of_build": "2022"
   }
 }
