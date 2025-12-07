@@ -10,6 +10,17 @@
     "gross_tonnage": "2239",
     "year_of_build": "1973"
   },
+  "9501655": {
+    "imo": "9501655",
+    "name": "BBC BELEM",
+    "flag": "Antigua & Barbuda",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "128.97",
+    "beam_m": "16.71",
+    "deadweight_t": "8129",
+    "gross_tonnage": "6310",
+    "year_of_build": "2012"
+  },
   "9520132": {
     "imo": "9520132",
     "vessel_name": "BWEK MALTA",
