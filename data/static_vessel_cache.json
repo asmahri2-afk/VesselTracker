@@ -1,4 +1,15 @@
 {
+  "7325461": {
+    "imo": "7325461",
+    "vessel_name": "DURA BULK",
+    "flag": "Panama",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "88.85",
+    "beam_m": "13.28",
+    "deadweight_t": "3007",
+    "gross_tonnage": "2239",
+    "year_of_build": "1973"
+  },
   "9611802": {
     "imo": "9611802",
     "vessel_name": "ASTRA CENTAURUS",
