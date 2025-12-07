@@ -10,6 +10,17 @@
     "gross_tonnage": "2239",
     "year_of_build": "1973"
   },
+  "9520132": {
+    "imo": "9520132",
+    "vessel_name": "BWEK MALTA",
+    "flag": "Singapore",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "119.95",
+    "beam_m": "19.00",
+    "deadweight_t": "9011",
+    "gross_tonnage": "7222",
+    "year_of_build": "2011"
+  },
   "9611802": {
     "imo": "9611802",
     "vessel_name": "ASTRA CENTAURUS",
