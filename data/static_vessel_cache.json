@@ -1,4 +1,15 @@
 {
+  "1049651": {
+    "imo": "1049651",
+    "name": "BOUKRAA-I",
+    "flag": "St Vincent & Grenadines",
+    "ship_type": "Tug",
+    "length_overall_m": "-",
+    "beam_m": "-",
+    "deadweight_t": "-",
+    "gross_tonnage": "301",
+    "year_of_build": "2025"
+  },
   "6417499": {
     "imo": "6417499",
     "name": "NAVE SANTA MARIA",
