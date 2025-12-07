@@ -54,6 +54,17 @@
     "gross_tonnage": "6310",
     "year_of_build": "2012"
   },
+  "9518880": {
+    "imo": "9518880",
+    "name": "ARGAN",
+    "flag": "Morocco",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "99.87",
+    "beam_m": "18.24",
+    "deadweight_t": "7374",
+    "gross_tonnage": "4776",
+    "year_of_build": "2011"
+  },
   "9520132": {
     "imo": "9520132",
     "vessel_name": "BWEK MALTA",
