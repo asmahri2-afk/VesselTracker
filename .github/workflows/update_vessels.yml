@@ -33,7 +33,7 @@ jobs:
       - name: Run scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
-          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_API_KEY }}
         run: |
           python scrape_vesselfinder.py
 
