@@ -1,1 +1,13 @@
-
+{
+  "9611802": {
+    "imo": "9611802",
+    "vessel_name": "ASTRA CENTAURUS",
+    "flag": "Marshall Islands",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "196.00",
+    "beam_m": "32.26",
+    "deadweight_t": "58518",
+    "gross_tonnage": "34837",
+    "year_of_build": "2012"
+  }
+}
