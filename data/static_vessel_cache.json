@@ -1,4 +1,15 @@
 {
+  "6417499": {
+    "imo": "6417499",
+    "name": "NAVE SANTA MARIA",
+    "flag": "Panama",
+    "ship_type": "Offshore Support Vessel",
+    "length_overall_m": "35.72",
+    "beam_m": "7.09",
+    "deadweight_t": "165",
+    "gross_tonnage": "194",
+    "year_of_build": "1964"
+  },
   "7325461": {
     "imo": "7325461",
     "vessel_name": "DURA BULK",
