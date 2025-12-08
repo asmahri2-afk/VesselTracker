@@ -61,7 +61,7 @@ def _norm(s):
     return re.sub(r"[^A-Z]", "", s.upper())
 
 ALIASES_RAW = {
- "laayoune":"LAAYOUNE","layoune":"LAAYOUNE","eh eun":"LAAYOUNE","leyoune":"LAAYOUNE",
+ "laayoune":"LAAYOUNE","layoune":"LAAYOUNE","EH EUN":"LAAYOUNE","leyoune":"LAAYOUNE",
  "tantan":"TAN TAN","tan tan":"TAN TAN","tan-tan":"TAN TAN","tan tan anch":"TAN TAN",
  "dakhla":"DAKHLA","dakhla port":"DAKHLA","ad dakhla":"DAKHLA",
  "dakhla anch":"DAKHLA ANCH","dakhla anch.":"DAKHLA ANCH","dakhla anchorage":"DAKHLA ANCH",
