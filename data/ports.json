@@ -2,20 +2,48 @@
   "LAAYOUNE": { "lat": 27.092036, "lon": -13.454842 },
   "TAN TAN": { "lat": 28.483825, "lon": -11.383329 },
   "TARFAYA": { "lat": 27.9373, "lon": -12.9221 },
+
   "DAKHLA": { "lat": 23.656566, "lon": -15.94546 },
   "DAKHLA ANCH": { "lat": 23.616229, "lon": -16.073519 },
+
   "AGADIR": { "lat": 30.417773, "lon": -9.677648 },
   "AGADIR ANCH": { "lat": 30.350000, "lon": -9.750000 },
   "ESSAOUIRA": { "lat": 31.508502, "lon": -9.77465 },
   "SAFI": { "lat": 32.305548, "lon": -9.269444 },
+
   "CASABLANCA": { "lat": 33.650134, "lon": -7.63623 },
   "MOHAMMEDIA": { "lat": 33.686, "lon": -7.391 },
   "JORF LASFAR": { "lat": 33.113, "lon": -8.627 },
   "KENITRA": { "lat": 34.25, "lon": -6.633 },
+
   "TANGER MED": { "lat": 35.8904, "lon": -5.5035 },
   "TANGER VILLE": { "lat": 35.7796, "lon": -5.8065 },
   "NADOR": { "lat": 35.155, "lon": -2.927 },
   "AL HOCEIMA": { "lat": 35.24, "lon": -3.93 },
+
+  "PRAIA": { "lat": 14.918, "lon": -23.509 },
+  "PRAIA ANCH": { "lat": 14.900, "lon": -23.550 },
+
+  "MINDELO": { "lat": 16.885, "lon": -25.000 },
+  "MINDELO ANCH": { "lat": 16.850, "lon": -25.050 },
+
+  "SAL": { "lat": 16.747, "lon": -22.950 },
+  "SAL ANCH": { "lat": 16.720, "lon": -22.980 },
+
+  "BOAVISTA": { "lat": 16.150, "lon": -22.910 },
+  "BOAVISTA ANCH": { "lat": 16.100, "lon": -22.950 },
+
+  "MAIO": { "lat": 15.133, "lon": -23.217 },
+  "MAIO ANCH": { "lat": 15.100, "lon": -23.260 },
+
+  "FOGO": { "lat": 14.900, "lon": -24.500 },
+  "FOGO ANCH": { "lat": 14.860, "lon": -24.550 },
+
+  "SÃO NICOLAU": { "lat": 16.566, "lon": -24.358 },
+  "SAO NICOLAU ANCH": { "lat": 16.540, "lon": -24.400 },
+
+  "SÃO VICENTE": { "lat": 16.880, "lon": -25.000 },
+  "SAO VICENTE ANCH": { "lat": 16.850, "lon": -25.030 }
 
   "LAS PALMAS": { "lat": 28.131, "lon": -15.4314 },
   "LAS PALMAS ANCH": { "lat": 28.05, "lon": -15.5 },
@@ -83,10 +111,10 @@
 
   "ALEXANDRIA": { "lat": 31.2, "lon": 29.9 },
   "PORT SAID": { "lat": 31.266, "lon": 32.3 },
-  "DAMietta": { "lat": 31.45, "lon": 31.81 },
+  "DAMIETTA": { "lat": 31.45, "lon": 31.81 },
   "SUEZ": { "lat": 29.966, "lon": 32.55 },
   "ADABIYA": { "lat": 29.95, "lon": 32.42 },
-  "SAFEGA": { "lat": 26.733, "lon": 33.95 },
+  "SAFAGA": { "lat": 26.733, "lon": 33.95 },
   "HURGHADA": { "lat": 27.257, "lon": 33.811 },
   "SHARM EL SHEIKH": { "lat": 27.85, "lon": 34.28 },
 
@@ -109,5 +137,44 @@
   "BRINDISI": { "lat": 40.65, "lon": 17.94 },
   "BARI": { "lat": 41.14, "lon": 16.87 },
   "TRIESTE": { "lat": 45.64, "lon": 13.76 },
-  "VENICE": { "lat": 45.44, "lon": 12.33 }
+  "VENICE": { "lat": 45.44, "lon": 12.33 },
+
+  "DAKAR": { "lat": 14.692, "lon": -17.446 },
+  "DAKAR ANCH": { "lat": 14.500, "lon": -17.300 },
+
+  "NOUAKCHOTT": { "lat": 18.061, "lon": -15.991 },
+  "NOUAKCHOTT ANCH": { "lat": 18.000, "lon": -16.100 },
+
+  "NOUADHIBOU": { "lat": 20.934, "lon": -17.034 },
+  "NOUADHIBOU ANCH": { "lat": 20.900, "lon": -17.150 },
+
+  "BANJUL": { "lat": 13.455, "lon": -16.582 },
+  "BANJUL ANCH": { "lat": 13.400, "lon": -16.650 },
+
+  "CONAKRY": { "lat": 9.507, "lon": -13.712 },
+  "CONAKRY ANCH": { "lat": 9.450, "lon": -13.800 },
+
+  "FREETOWN": { "lat": 8.484, "lon": -13.234 },
+  "FREETOWN ANCH": { "lat": 8.420, "lon": -13.300 },
+
+  "MONROVIA": { "lat": 6.310, "lon": -10.804 },
+  "MONROVIA ANCH": { "lat": 6.250, "lon": -10.900 },
+
+  "ABIDJAN": { "lat": 5.316, "lon": -4.016 },
+  "ABIDJAN ANCH": { "lat": 5.250, "lon": -4.150 },
+
+  "SAN PEDRO": { "lat": 4.747, "lon": -6.636 },
+  "SAN PEDRO ANCH": { "lat": 4.700, "lon": -6.700 },
+
+  "TAKORADI": { "lat": 4.898, "lon": -1.748 },
+  "TAKORADI ANCH": { "lat": 4.850, "lon": -1.800 },
+
+  "TEMA": { "lat": 5.637, "lon": -0.016 },
+  "TEMA ANCH": { "lat": 5.600, "lon": -0.080 },
+
+  "LOME": { "lat": 6.136, "lon": 1.287 },
+  "LOME ANCH": { "lat": 6.080, "lon": 1.240 },
+
+  "COTONOU": { "lat": 6.350, "lon": 2.433 },
+  "COTONOU ANCH": { "lat": 6.300, "lon": 2.350 }
 }
