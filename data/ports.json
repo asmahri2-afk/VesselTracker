@@ -7,7 +7,7 @@
   "DAKHLA ANCH": { "lat": 23.616229, "lon": -16.073519 },
 
   "AGADIR": { "lat": 30.417773, "lon": -9.677648 },
-  "AGADIR ANCH": { "lat": 30.350000, "lon": -9.750000 },
+  "AGADIR ANCH": { "lat": 30.35, "lon": -9.75 },
   "ESSAOUIRA": { "lat": 31.508502, "lon": -9.77465 },
   "SAFI": { "lat": 32.305548, "lon": -9.269444 },
 
@@ -22,28 +22,28 @@
   "AL HOCEIMA": { "lat": 35.24, "lon": -3.93 },
 
   "PRAIA": { "lat": 14.918, "lon": -23.509 },
-  "PRAIA ANCH": { "lat": 14.900, "lon": -23.550 },
+  "PRAIA ANCH": { "lat": 14.9, "lon": -23.55 },
 
-  "MINDELO": { "lat": 16.885, "lon": -25.000 },
-  "MINDELO ANCH": { "lat": 16.850, "lon": -25.050 },
+  "MINDELO": { "lat": 16.885, "lon": -25.0 },
+  "MINDELO ANCH": { "lat": 16.85, "lon": -25.05 },
 
-  "SAL": { "lat": 16.747, "lon": -22.950 },
-  "SAL ANCH": { "lat": 16.720, "lon": -22.980 },
+  "SAL": { "lat": 16.747, "lon": -22.95 },
+  "SAL ANCH": { "lat": 16.72, "lon": -22.98 },
 
-  "BOAVISTA": { "lat": 16.150, "lon": -22.910 },
-  "BOAVISTA ANCH": { "lat": 16.100, "lon": -22.950 },
+  "BOAVISTA": { "lat": 16.15, "lon": -22.91 },
+  "BOAVISTA ANCH": { "lat": 16.1, "lon": -22.95 },
 
   "MAIO": { "lat": 15.133, "lon": -23.217 },
-  "MAIO ANCH": { "lat": 15.100, "lon": -23.260 },
+  "MAIO ANCH": { "lat": 15.1, "lon": -23.26 },
 
-  "FOGO": { "lat": 14.900, "lon": -24.500 },
-  "FOGO ANCH": { "lat": 14.860, "lon": -24.550 },
+  "FOGO": { "lat": 14.9, "lon": -24.5 },
+  "FOGO ANCH": { "lat": 14.86, "lon": -24.55 },
 
   "SÃO NICOLAU": { "lat": 16.566, "lon": -24.358 },
-  "SAO NICOLAU ANCH": { "lat": 16.540, "lon": -24.400 },
+  "SAO NICOLAU ANCH": { "lat": 16.54, "lon": -24.4 },
 
-  "SÃO VICENTE": { "lat": 16.880, "lon": -25.000 },
-  "SAO VICENTE ANCH": { "lat": 16.850, "lon": -25.030 }
+  "SÃO VICENTE": { "lat": 16.88, "lon": -25.0 },
+  "SAO VICENTE ANCH": { "lat": 16.85, "lon": -25.03 },
 
   "LAS PALMAS": { "lat": 28.131, "lon": -15.4314 },
   "LAS PALMAS ANCH": { "lat": 28.05, "lon": -15.5 },
@@ -140,41 +140,41 @@
   "VENICE": { "lat": 45.44, "lon": 12.33 },
 
   "DAKAR": { "lat": 14.692, "lon": -17.446 },
-  "DAKAR ANCH": { "lat": 14.500, "lon": -17.300 },
+  "DAKAR ANCH": { "lat": 14.5, "lon": -17.3 },
 
   "NOUAKCHOTT": { "lat": 18.061, "lon": -15.991 },
-  "NOUAKCHOTT ANCH": { "lat": 18.000, "lon": -16.100 },
+  "NOUAKCHOTT ANCH": { "lat": 18.0, "lon": -16.1 },
 
   "NOUADHIBOU": { "lat": 20.934, "lon": -17.034 },
-  "NOUADHIBOU ANCH": { "lat": 20.900, "lon": -17.150 },
+  "NOUADHIBOU ANCH": { "lat": 20.9, "lon": -17.15 },
 
   "BANJUL": { "lat": 13.455, "lon": -16.582 },
-  "BANJUL ANCH": { "lat": 13.400, "lon": -16.650 },
+  "BANJUL ANCH": { "lat": 13.4, "lon": -16.65 },
 
   "CONAKRY": { "lat": 9.507, "lon": -13.712 },
-  "CONAKRY ANCH": { "lat": 9.450, "lon": -13.800 },
+  "CONAKRY ANCH": { "lat": 9.45, "lon": -13.8 },
 
   "FREETOWN": { "lat": 8.484, "lon": -13.234 },
-  "FREETOWN ANCH": { "lat": 8.420, "lon": -13.300 },
+  "FREETOWN ANCH": { "lat": 8.42, "lon": -13.3 },
 
-  "MONROVIA": { "lat": 6.310, "lon": -10.804 },
-  "MONROVIA ANCH": { "lat": 6.250, "lon": -10.900 },
+  "MONROVIA": { "lat": 6.31, "lon": -10.804 },
+  "MONROVIA ANCH": { "lat": 6.25, "lon": -10.9 },
 
   "ABIDJAN": { "lat": 5.316, "lon": -4.016 },
-  "ABIDJAN ANCH": { "lat": 5.250, "lon": -4.150 },
+  "ABIDJAN ANCH": { "lat": 5.25, "lon": -4.15 },
 
   "SAN PEDRO": { "lat": 4.747, "lon": -6.636 },
-  "SAN PEDRO ANCH": { "lat": 4.700, "lon": -6.700 },
+  "SAN PEDRO ANCH": { "lat": 4.7, "lon": -6.7 },
 
   "TAKORADI": { "lat": 4.898, "lon": -1.748 },
-  "TAKORADI ANCH": { "lat": 4.850, "lon": -1.800 },
+  "TAKORADI ANCH": { "lat": 4.85, "lon": -1.8 },
 
   "TEMA": { "lat": 5.637, "lon": -0.016 },
-  "TEMA ANCH": { "lat": 5.600, "lon": -0.080 },
+  "TEMA ANCH": { "lat": 5.6, "lon": -0.08 },
 
   "LOME": { "lat": 6.136, "lon": 1.287 },
-  "LOME ANCH": { "lat": 6.080, "lon": 1.240 },
+  "LOME ANCH": { "lat": 6.08, "lon": 1.24 },
 
-  "COTONOU": { "lat": 6.350, "lon": 2.433 },
-  "COTONOU ANCH": { "lat": 6.300, "lon": 2.350 }
-}
+  "COTONOU": { "lat": 6.35, "lon": 2.433 },
+  "COTONOU ANCH": { "lat": 6.3, "lon": 2.35 }
+  }
