@@ -76,6 +76,17 @@
     "gross_tonnage": "7222",
     "year_of_build": "2011"
   },
+  "9544346": {
+    "imo": "9544346",
+    "name": "MT MED BLUE JAY",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "115.97",
+    "beam_m": "17.20",
+    "deadweight_t": "8231",
+    "gross_tonnage": "5633",
+    "year_of_build": "2021"
+  },
   "9611802": {
     "imo": "9611802",
     "vessel_name": "ASTRA CENTAURUS",
