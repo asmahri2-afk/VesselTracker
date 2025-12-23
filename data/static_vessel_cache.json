@@ -54,6 +54,17 @@
     "gross_tonnage": "7002",
     "year_of_build": "2007"
   },
+  "9428889": {
+    "imo": "9428889",
+    "name": "BOMAR MERCURY",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.60",
+    "beam_m": "16.90",
+    "deadweight_t": "7003",
+    "gross_tonnage": "4808",
+    "year_of_build": "2008"
+  },
   "9501655": {
     "imo": "9501655",
     "name": "BBC BELEM",
