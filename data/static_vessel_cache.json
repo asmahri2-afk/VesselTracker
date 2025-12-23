@@ -32,6 +32,17 @@
     "gross_tonnage": "2239",
     "year_of_build": "1973"
   },
+  "9128013": {
+    "imo": "9128013",
+    "name": "RIGHT STEP",
+    "flag": "Antigua & Barbuda",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "100.70",
+    "beam_m": "16.00",
+    "deadweight_t": "5200",
+    "gross_tonnage": "3796",
+    "year_of_build": "1996"
+  },
   "9427079": {
     "imo": "9427079",
     "name": "BBC GREENLAND",
