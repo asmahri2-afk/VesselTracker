@@ -43,6 +43,17 @@
     "gross_tonnage": "3796",
     "year_of_build": "1996"
   },
+  "9310197": {
+    "imo": "9310197",
+    "name": "TINGIS",
+    "flag": "Morocco",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.10",
+    "beam_m": "16.93",
+    "deadweight_t": "6937",
+    "gross_tonnage": "4471",
+    "year_of_build": "2005"
+  },
   "9427079": {
     "imo": "9427079",
     "name": "BBC GREENLAND",
