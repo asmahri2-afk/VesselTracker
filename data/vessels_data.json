@@ -173,30 +173,5 @@
     "year_of_build": "2022",
     "length_overall_m": "117.53",
     "beam_m": "19.50"
-  },
-  "9977751": {
-    "imo": "9977751",
-    "name": "CMA CGM SYRACUSE",
-    "lat": 35.0,
-    "lon": 129.0,
-    "sog": 16.1,
-    "cog": 163.9,
-    "last_pos_utc": "Dec 31, 2025 02:14 UTC",
-    "destination": "Los Angeles, United States (USA)",
-    "nearest_port": "ISKENDERUN",
-    "nearest_distance_nm": 4321.125418399736,
-    "destination_port": null,
-    "destination_distance_nm": null,
-    "eta_hours": null,
-    "eta_utc": null,
-    "eta_text": null,
-    "done": false,
-    "ship_type": "Container Ship",
-    "flag": "France",
-    "deadweight_t": "85685",
-    "gross_tonnage": "74739",
-    "year_of_build": "2025",
-    "length_overall_m": "272.00",
-    "beam_m": "43.00"
   }
 }
