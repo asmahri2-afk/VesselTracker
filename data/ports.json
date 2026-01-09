@@ -1,5 +1,4 @@
 {
-  "--- AFRICA & MEDITERRANEAN ---": {},
   "LAAYOUNE": { "lat": 27.092036, "lon": -13.454842 },
   "TAN TAN": { "lat": 28.483825, "lon": -11.383329 },
   "TARFAYA": { "lat": 27.9373, "lon": -12.9221 },
@@ -142,8 +141,6 @@
   "LOME ANCH": { "lat": 6.08, "lon": 1.24 },
   "COTONOU": { "lat": 6.35, "lon": 2.433 },
   "COTONOU ANCH": { "lat": 6.3, "lon": 2.35 },
-
-  "--- NORTH AMERICA ---": {},
   "LOS ANGELES": { "lat": 33.772, "lon": -118.243 },
   "LOS ANGELES ANCH": { "lat": 33.7, "lon": -118.2 },
   "LONG BEACH": { "lat": 33.754, "lon": -118.216 },
@@ -160,8 +157,6 @@
   "NEW YORK": { "lat": 40.712, "lon": -74.006 },
   "NEW YORK ANCH": { "lat": 40.5, "lon": -74.0 },
   "HALIFAX": { "lat": 44.648, "lon": -63.575 },
-
-  "--- SOUTH AMERICA ---": {},
   "SANTOS": { "lat": -23.961, "lon": -46.332 },
   "SANTOS ANCH": { "lat": -24.1, "lon": -46.3 },
   "RIO DE JANEIRO": { "lat": -22.906, "lon": -43.172 },
@@ -175,8 +170,6 @@
   "CALLAO ANCH": { "lat": -12.0, "lon": -77.2 },
   "GUAYAQUIL": { "lat": -2.189, "lon": -79.889 },
   "CARTAGENA COL": { "lat": 10.391, "lon": -75.479 },
-
-  "--- ASIA ---": {},
   "SHANGHAI": { "lat": 31.230, "lon": 121.473 },
   "SHANGHAI ANCH": { "lat": 31.1, "lon": 122.1 },
   "NINGBO": { "lat": 29.868, "lon": 121.544 },
