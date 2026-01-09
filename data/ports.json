@@ -186,7 +186,7 @@
   "MUNDRA": { "lat": 22.733, "lon": 69.700 },
   "NHAVA SHEVA": { "lat": 18.950, "lon": 72.950 },
   "COLOMBO": { "lat": 6.927, "lon": 79.861 },
-  "JEBEL ALI": { "lat": 25.011, "lon": 55.061 }
+  "JEBEL ALI": { "lat": 25.011, "lon": 55.061 },
   "GDANSK": { "lat": 54.397, "lon": 18.665 },
   "GDYNIA": { "lat": 54.533, "lon": 18.55 },
   "SZCZECIN": { "lat": 53.433, "lon": 14.583 },
@@ -279,5 +279,5 @@
   "PUNTA ARENAS": { "lat": -53.15, "lon": -70.91 },
   "USHUAIA": { "lat": -54.8, "lon": -68.3 },
   "LONGYEARBYEN": { "lat": 78.22, "lon": 15.63 },
-  "DUTCH HARBOR": { "lat": 53.88, "lon": -166.54 },
+  "DUTCH HARBOR": { "lat": 53.88, "lon": -166.54 }
 }
