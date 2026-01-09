@@ -252,5 +252,17 @@
   "PASCAGOULA": { "lat": 30.36, "lon": -88.55 },
   "MOBILE": { "lat": 30.69, "lon": -88.04 },
   "PENSACOLA": { "lat": 30.41, "lon": -87.21 },
-  "TAMPA": { "lat": 27.95, "lon": -82.45 }
+  "TAMPA": { "lat": 27.95, "lon": -82.45 },
+  "GUANGZHOU": { "lat": 22.766, "lon": 113.600 },
+  "TIANJIN": { "lat": 38.985, "lon": 117.766 },
+  "XIAMEN": { "lat": 24.450, "lon": 118.066 },
+  "TANJUNG PELEPAS": { "lat": 1.365, "lon": 103.550 },
+  "TANJUNG PRIOK": { "lat": -6.100, "lon": 106.885 },
+  "MARSAXLOKK": { "lat": 35.816, "lon": 14.538 },
+  "KOPER": { "lat": 45.556, "lon": 13.733 },
+  "CHARLESTON": { "lat": 32.780, "lon": -79.930 },
+  "BALTIMORE": { "lat": 39.270, "lon": -76.590 },
+  "KINGSTON": { "lat": 17.965, "lon": -76.784 },
+  "BRISBANE": { "lat": -27.380, "lon": 153.160 },
+  "ADELAIDE": { "lat": -34.840, "lon": 138.500 }
 }
