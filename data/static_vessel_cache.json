@@ -43,6 +43,17 @@
     "gross_tonnage": "3796",
     "year_of_build": "1996"
   },
+  "9212448": {
+    "imo": "9212448",
+    "name": "STORM I",
+    "flag": "Panama",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "100.58",
+    "beam_m": "18.80",
+    "deadweight_t": "6962",
+    "gross_tonnage": "4450",
+    "year_of_build": "1999"
+  },
   "9310197": {
     "imo": "9310197",
     "name": "TINGIS",
