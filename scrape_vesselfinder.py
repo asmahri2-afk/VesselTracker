@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vessel Tracking Script - Battle Ready & Feature Complete
-Merges production-grade reliability with full data capture logic.
+Includes: ETA Calculation, Port Matching, Static Specs, and Coordinate Preservation.
 """
 
 import fcntl
@@ -249,23 +249,22 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
     api_data = fetch_with_retry(f"{RENDER_BASE}/vessel-full/{imo}")
     
     if api_data and api_data.get("found") is not False:
-        # Update dynamic fields
-        result.update({
-            "imo": imo,
-            "lat": safe_float(api_data.get("lat")),
-            "lon": safe_float(api_data.get("lon")),
-            "sog": safe_float(api_data.get("sog"), 0.0),
-            "cog": safe_float(api_data.get("cog"), 0.0),
-            "last_pos_utc": api_data.get("last_pos_utc"),
-            "destination": (api_data.get("destination") or "").strip(),
-        })
+        # --- CRITICAL: Dynamic Fields with Fallback ---
+        # If API returns None for Lat/Lon, we KEEP the value from static_cache (result)
+        # This ensures ETA calculations don't break on intermittent API blips
+        result["lat"] = safe_float(api_data.get("lat")) if api_data.get("lat") is not None else result.get("lat")
+        result["lon"] = safe_float(api_data.get("lon")) if api_data.get("lon") is not None else result.get("lon")
         
-        # Update static fields if available in API, else keep cache
+        result["sog"] = safe_float(api_data.get("sog"), 0.0)
+        result["cog"] = safe_float(api_data.get("cog"), 0.0)
+        result["last_pos_utc"] = api_data.get("last_pos_utc")
+        result["destination"] = (api_data.get("destination") or "").strip()
+        
+        # Update static fields if available
         result["name"] = (api_data.get("vessel_name") or api_data.get("name") or result.get("name") or f"IMO {imo}").strip()
         result["ship_type"] = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
         result["flag"] = (api_data.get("flag") or result.get("flag") or "").strip()
         
-        # Numeric statics
         for key in ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m"]:
             if api_data.get(key) is not None:
                 result[key] = api_data.get(key)
@@ -285,19 +284,15 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
     cog = v.get("cog")
     last = v.get("last_pos_utc")
     dest = v.get("destination", "")
-    
-    # Helper for static fields
-    def get_val(key): return v.get(key)
 
-    # Base state template
+    # State template with Static Specs
     new_state = {
         "imo": imo, "name": name, "lat": lat, "lon": lon, "sog": sog, "cog": cog, 
         "last_pos_utc": last, "destination": dest, "done": False,
-        # Static specs
-        "ship_type": get_val("ship_type"), "flag": get_val("flag"),
-        "deadweight_t": get_val("deadweight_t"), "gross_tonnage": get_val("gross_tonnage"),
-        "year_of_build": get_val("year_of_build"), "length_overall_m": get_val("length_overall_m"),
-        "beam_m": get_val("beam_m")
+        "ship_type": v.get("ship_type"), "flag": v.get("flag"),
+        "deadweight_t": v.get("deadweight_t"), "gross_tonnage": v.get("gross_tonnage"),
+        "year_of_build": v.get("year_of_build"), "length_overall_m": v.get("length_overall_m"),
+        "beam_m": v.get("beam_m")
     }
 
     if lat is None or lon is None:
@@ -317,9 +312,9 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
     if dest_data:
         dest_dist = haversine_nm(lat, lon, dest_data["lat"], dest_data["lon"])
 
-    # ETA Calculation
+    # --- ETA CALCULATION ---
     eta_h, eta_utc_str, eta_text = None, None, None
-    if dest_dist and dest_dist > MIN_DISTANCE_FOR_ETA and sog >= MIN_SOG_FOR_ETA and not too_old:
+    if dest_dist is not None and dest_dist > MIN_DISTANCE_FOR_ETA and sog >= MIN_SOG_FOR_ETA and not too_old:
         speed = min(max(sog, MIN_SOG_FOR_ETA), MAX_ETA_SOG_CAP)
         try:
             raw_h = dest_dist / speed
@@ -336,11 +331,11 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
         "eta_hours": eta_h, "eta_utc": eta_utc_str, "eta_text": eta_text
     })
 
-    # Arrival
+    # Arrival Check
     arrived = near_dist is not None and near_dist <= ARRIVAL_RADIUS_NM and sog <= ARRIVAL_SOG_THRESHOLD
     if arrived: new_state["done"] = True
 
-    # Alert Logic
+    # Alert Construction
     if not prev:
         msg = [
             f"🚢 {name} (IMO {imo})", "📌 Status: First tracking detected",
@@ -367,7 +362,7 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
     arrival_event = arrived and not prev.get("done")
     if not (dest_changed or moved or arrival_event): return None, new_state
 
-    # Build Alert Msg
+    # Alert Msg
     if arrival_event: status = "Arrived at destination area"
     elif dest_changed: status = "Destination changed"
     else: status = "Position / track updated"
@@ -396,7 +391,6 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
 # =============================================================================
 
 def main():
-    # Unix file locking
     lock_file = None
     try:
         lock_file = open(LOCK_FILE_PATH, 'w')
@@ -410,7 +404,7 @@ def main():
         return
 
     try:
-        # Ping to wake up API
+        # Ping API
         try: requests.get(f"{RENDER_BASE}/ping", timeout=10)
         except: pass
 
@@ -422,7 +416,7 @@ def main():
         
         ports = load_json(PORTS_PATH, {})
         if not ports: raise RuntimeError("ports.json missing or empty")
-        ports = {k.upper(): v for k, v in ports.items()} # Ensure uppercase keys
+        ports = {k.upper(): v for k, v in ports.items()}
         
         prev_states = load_json(VESSELS_STATE_PATH, {})
         new_states_all = {}
