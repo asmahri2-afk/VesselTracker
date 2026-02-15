@@ -186,6 +186,17 @@
     "gross_tonnage": "5633",
     "year_of_build": "2021"
   },
+  "9593505": {
+    "imo": "9593505",
+    "name": "PIONEERING SPIRIT",
+    "flag": "Malta",
+    "ship_type": "Crane Ship",
+    "length_overall_m": "477.00",
+    "beam_m": "-",
+    "deadweight_t": "499125",
+    "gross_tonnage": "403342",
+    "year_of_build": "2014"
+  },
   "9611802": {
     "imo": "9611802",
     "vessel_name": "ASTRA CENTAURUS",
