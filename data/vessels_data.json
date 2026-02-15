@@ -4,9 +4,9 @@
     "name": "DURA BULK",
     "lat": 30.0,
     "lon": -10.0,
-    "sog": 0.8,
-    "cog": 162.7,
-    "last_pos_utc": "Feb 15, 2026 15:05 UTC",
+    "sog": 0.9,
+    "cog": 168.0,
+    "last_pos_utc": "Feb 15, 2026 15:10 UTC",
     "destination": "Agadir, Morocco",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -20,9 +20,9 @@
     "nearest_distance_nm": 24.6976696829147,
     "destination_port": "AGADIR",
     "destination_distance_nm": 30.148325352341615,
-    "eta_hours": 37.685406690427016,
-    "eta_utc": "2026-02-17 04:47:47 UTC",
-    "eta_text": "1d 13h"
+    "eta_hours": 33.49813928037957,
+    "eta_utc": "2026-02-17 00:40:33 UTC",
+    "eta_text": "1d 9h"
   },
   "9409754": {
     "imo": "9409754",
@@ -95,9 +95,9 @@
     "nearest_distance_nm": 24.942275804881042,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 24.942275804881042,
-    "eta_hours": 41.57045967480174,
-    "eta_utc": "2026-02-17 08:40:58 UTC",
-    "eta_text": "1d 17h"
+    "eta_hours": null,
+    "eta_utc": null,
+    "eta_text": null
   },
   "9933913": {
     "imo": "9933913",
