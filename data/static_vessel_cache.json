@@ -142,6 +142,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9813046": {
+    "imo": "9813046",
+    "name": "DH BLOSSOMING",
+    "flag": "Singapore",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.00",
+    "beam_m": "18.00",
+    "deadweight_t": "8703",
+    "gross_tonnage": "6052",
+    "year_of_build": "2018"
+  },
   "9841421": {
     "imo": "9841421",
     "name": "DING HENG 23",
