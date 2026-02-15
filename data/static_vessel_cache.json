@@ -186,6 +186,17 @@
     "gross_tonnage": "6052",
     "year_of_build": "2018"
   },
+  "9835185": {
+    "imo": "9835185",
+    "name": "VIVIT FORNAX",
+    "flag": "Liberia",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "228.40",
+    "beam_m": "36.60",
+    "deadweight_t": "54406",
+    "gross_tonnage": "49552",
+    "year_of_build": "2019"
+  },
   "9841421": {
     "imo": "9841421",
     "name": "DING HENG 23",
