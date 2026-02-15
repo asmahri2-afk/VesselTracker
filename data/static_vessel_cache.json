@@ -76,6 +76,17 @@
     "gross_tonnage": "4471",
     "year_of_build": "2005"
   },
+  "9364150": {
+    "imo": "9364150",
+    "name": "SINE BRES",
+    "flag": "Antigua & Barbuda",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "87.90",
+    "beam_m": "12.60",
+    "deadweight_t": "3750",
+    "gross_tonnage": "2658",
+    "year_of_build": "2006"
+  },
   "9427079": {
     "imo": "9427079",
     "name": "BBC GREENLAND",
