@@ -98,6 +98,17 @@
     "gross_tonnage": "4808",
     "year_of_build": "2008"
   },
+  "9462093": {
+    "imo": "9462093",
+    "name": "PS OUFELLA",
+    "flag": "Morocco",
+    "ship_type": "Oil Products Tanker",
+    "length_overall_m": "64.44",
+    "beam_m": "12.00",
+    "deadweight_t": "1792",
+    "gross_tonnage": "1055",
+    "year_of_build": "2007"
+  },
   "9501655": {
     "imo": "9501655",
     "name": "BBC BELEM",
