@@ -320,8 +320,8 @@
   "PORT SOCONY": {
     "lat": 40.55,
     "lon": -74.25,
-    "anchorage_depth": 9.4,
-    "cargo_pier_depth": 7.9
+    "anchorage_depth": 11.0,
+    "cargo_pier_depth": 9.4
   },
   "PUERTO BOTADO": {
     "lat": 19.2,
@@ -446,7 +446,7 @@
   "VICTORIA": {
     "lat": -4.616667,
     "lon": 55.45,
-    "anchorage_depth": 20.1,
+    "anchorage_depth": 14.0,
     "cargo_pier_depth": 9.4
   },
   "FRIENDSHIP": {
@@ -1023,7 +1023,7 @@
     "lat": 32.316667,
     "lon": -64.833333,
     "anchorage_depth": 11.0,
-    "cargo_pier_depth": 11.0
+    "cargo_pier_depth": 0.0
   },
   "MACAE": {
     "lat": -22.366667,
@@ -3033,7 +3033,7 @@
     "lat": 40.666667,
     "lon": -74.016667,
     "anchorage_depth": 12.5,
-    "cargo_pier_depth": 7.9
+    "cargo_pier_depth": 12.5
   },
   "CITY ISLAND": {
     "lat": 40.85,
@@ -3992,8 +3992,8 @@
   "CHIWAN": {
     "lat": 19.966667,
     "lon": 110.033333,
-    "anchorage_depth": 12.5,
-    "cargo_pier_depth": 15.5
+    "anchorage_depth": 3.4,
+    "cargo_pier_depth": 3.4
   },
   "HONDAGUA": {
     "lat": 13.95,
@@ -4160,8 +4160,8 @@
   "HIGASHI-HARIMA": {
     "lat": 34.7,
     "lon": 134.833333,
-    "anchorage_depth": 18.6,
-    "cargo_pier_depth": 17.1
+    "anchorage_depth": 7.9,
+    "cargo_pier_depth": 4.9
   },
   "KAKOGAWA": {
     "lat": 34.7,
@@ -4850,8 +4850,8 @@
   "BAYWAY": {
     "lat": 40.633333,
     "lon": -74.2,
-    "anchorage_depth": 9.4,
-    "cargo_pier_depth": 7.9
+    "anchorage_depth": 11.0,
+    "cargo_pier_depth": 9.4
   },
   "CATSKILL": {
     "lat": 42.216667,
@@ -5186,8 +5186,8 @@
   "COCKBURN TOWN": {
     "lat": 24.05,
     "lon": -74.533333,
-    "anchorage_depth": 12.5,
-    "cargo_pier_depth": 4.9
+    "anchorage_depth": 6.4,
+    "cargo_pier_depth": 1.8
   },
   "KIN WAN": {
     "lat": 26.416667,
@@ -10659,7 +10659,7 @@
     "lat": 42.616667,
     "lon": -82.516667,
     "anchorage_depth": 7.9,
-    "cargo_pier_depth": 3.4
+    "cargo_pier_depth": 0.0
   },
   "DESBARATS": {
     "lat": 46.333333,
@@ -11270,7 +11270,7 @@
   "HULL": {
     "lat": 45.433333,
     "lon": -75.7,
-    "anchorage_depth": 1.8,
+    "anchorage_depth": 9.4,
     "cargo_pier_depth": 3.4
   },
   "COBOURG": {
@@ -11787,7 +11787,7 @@
     "lat": 51.433333,
     "lon": 0.7,
     "anchorage_depth": 14.0,
-    "cargo_pier_depth": 12.5
+    "cargo_pier_depth": 15.5
   },
   "LONDON": {
     "lat": 51.5,
@@ -14894,8 +14894,8 @@
   "PORT CHILKOOT": {
     "lat": 59.233333,
     "lon": -135.433333,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 21.6,
+    "cargo_pier_depth": 4.9
   },
   "SALACGRIVA": {
     "lat": 57.7,
@@ -15969,7 +15969,7 @@
     "lat": 65.266667,
     "lon": -14.0,
     "anchorage_depth": 11.0,
-    "cargo_pier_depth": 6.4
+    "cargo_pier_depth": 0.0
   },
   "PICTOU": {
     "lat": 45.666667,
@@ -22298,14 +22298,14 @@
   "DAKHLA": {
     "lat": 23.656566,
     "lon": -15.94546,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 12.5,
+    "cargo_pier_depth": 7.9
   },
   "DAKHLA ANCH": {
     "lat": 23.616229,
     "lon": -16.073519,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 12.5,
+    "cargo_pier_depth": 7.9
   },
   "AGADIR ANCH": {
     "lat": 30.35,
@@ -22322,8 +22322,8 @@
   "TANGER MED": {
     "lat": 35.8904,
     "lon": -5.5035,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 9.4,
+    "cargo_pier_depth": 14.0
   },
   "TANGER VILLE": {
     "lat": 35.7796,
@@ -22358,14 +22358,14 @@
   "MINDELO": {
     "lat": 16.885,
     "lon": -25.0,
-    "anchorage_depth": 21.6,
-    "cargo_pier_depth": 11.0
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "MINDELO ANCH": {
     "lat": 16.85,
     "lon": -25.05,
-    "anchorage_depth": 21.6,
-    "cargo_pier_depth": 11.0
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "SAL": {
     "lat": 16.747,
@@ -22514,8 +22514,8 @@
   "LISBON": {
     "lat": 38.709,
     "lon": -9.146,
-    "anchorage_depth": 15.5,
-    "cargo_pier_depth": 17.1
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "LEIXOES": {
     "lat": 41.186,
@@ -22532,8 +22532,8 @@
   "SETTE": {
     "lat": 43.4,
     "lon": 3.7,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 7.9,
+    "cargo_pier_depth": 12.5
   },
   "SFAX": {
     "lat": 34.725,
@@ -22544,8 +22544,8 @@
   "BIZERTE": {
     "lat": 37.28,
     "lon": 9.865,
-    "anchorage_depth": 23.2,
-    "cargo_pier_depth": 7.9
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "PORT SAID": {
     "lat": 31.266,
@@ -22574,7 +22574,7 @@
   "HURGHADA": {
     "lat": 27.257,
     "lon": 33.811,
-    "anchorage_depth": 9.4,
+    "anchorage_depth": 0.0,
     "cargo_pier_depth": 0.0
   },
   "ASHKELON": {
@@ -22592,8 +22592,8 @@
   "NAPLES": {
     "lat": 40.84,
     "lon": 14.27,
-    "anchorage_depth": 20.1,
-    "cargo_pier_depth": 9.4
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "VENICE": {
     "lat": 45.44,
@@ -22802,8 +22802,8 @@
   "NHAVA SHEVA": {
     "lat": 18.95,
     "lon": 72.95,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 12.5,
+    "cargo_pier_depth": 16.5
   },
   "JEBEL ALI": {
     "lat": 25.011,
@@ -22862,8 +22862,8 @@
   "PUNTA ARENAS": {
     "lat": -53.15,
     "lon": -70.91,
-    "anchorage_depth": 7.9,
-    "cargo_pier_depth": 7.9
+    "anchorage_depth": 0.0,
+    "cargo_pier_depth": 0.0
   },
   "TIANJIN": {
     "lat": 38.985,
