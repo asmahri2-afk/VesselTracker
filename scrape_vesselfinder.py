@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-Vessel Tracking Script - Production Ready Version
-Tracks vessels via AIS data, calculates ETAs, and sends WhatsApp alerts.
-
-Features:
-- Fetches live AIS data from Render API with retry logic
-- Maintains persistent state for vessel tracking
-- Calculates ETA to destination ports
-- Sends WhatsApp notifications on position/destination changes
-- Caches static vessel specifications
-"""
-
 import json
 import logging
 import math
