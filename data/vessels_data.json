@@ -4,11 +4,11 @@
     "name": "DURA BULK",
     "lat": 30.0,
     "lon": -10.0,
-    "sog": 0.9,
-    "cog": 179.4,
-    "last_pos_utc": "Feb 15, 2026 15:16 UTC",
+    "sog": 1.2,
+    "cog": 171.0,
+    "last_pos_utc": "Feb 15, 2026 15:17 UTC",
     "destination": "Agadir, Morocco",
-    "done": true,
+    "done": false,
     "ship_type": "General Cargo Ship",
     "flag": "Panama",
     "deadweight_t": "3007",
@@ -20,9 +20,9 @@
     "nearest_distance_nm": 24.6976696829147,
     "destination_port": "AGADIR",
     "destination_distance_nm": 30.148325352341615,
-    "eta_hours": 33.49813928037957,
-    "eta_utc": "2026-02-17 00:46:29 UTC",
-    "eta_text": "1d 9h"
+    "eta_hours": 25.12360446028468,
+    "eta_utc": "2026-02-16 16:25:23 UTC",
+    "eta_text": "1d 1h"
   },
   "9409754": {
     "imo": "9409754",
@@ -96,7 +96,7 @@
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 24.942275804881042,
     "eta_hours": 41.57045967480174,
-    "eta_utc": "2026-02-17 08:50:57 UTC",
+    "eta_utc": "2026-02-17 08:52:17 UTC",
     "eta_text": "1d 17h"
   },
   "9933913": {
