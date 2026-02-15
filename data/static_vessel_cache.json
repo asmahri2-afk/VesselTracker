@@ -186,6 +186,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9698329": {
+    "imo": "9698329",
+    "name": "MARIA",
+    "flag": "Marshall Islands",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "199.93",
+    "beam_m": "32.30",
+    "deadweight_t": "63153",
+    "gross_tonnage": "35872",
+    "year_of_build": "2015"
+  },
   "9714678": {
     "imo": "9714678",
     "name": "GENCO CONSTELLATION",
