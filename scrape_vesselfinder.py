@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vessel Tracking Script - Battle Ready & Feature Complete
-Includes: ETA Calculation, Port Matching, Static Specs, and Coordinate Preservation.
+Thresholds updated for specific arrival logic (Speed < 1kn, Dist < 35.5nm).
 """
 
 import fcntl
@@ -57,17 +57,17 @@ CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"
 RENDER_BASE = "https://vessel-api-s85s.onrender.com"
 
 # =============================================================================
-# TRACKING THRESHOLDS
+# TRACKING THRESHOLDS (UPDATED)
 # =============================================================================
 
-ARRIVAL_RADIUS_NM = 35.5
+ARRIVAL_RADIUS_NM = 35.5        # User requested: 35nm radius for arrival
 MIN_MOVE_NM = 5.0
 MIN_SOG_FOR_ETA = 0.5
 MAX_ETA_HOURS = 240
 MAX_ETA_SOG_CAP = 18.0
 MAX_AIS_FOR_ETA_MIN = 360
 MIN_DISTANCE_FOR_ETA = 5.0
-ARRIVAL_SOG_THRESHOLD = 1.0
+ARRIVAL_SOG_THRESHOLD = 1.0     # User requested: Speed < 1kn means arrived
 
 API_MAX_RETRIES = 3
 API_RETRY_BACKOFF_BASE = 2.0
@@ -208,7 +208,7 @@ def match_destination_port(dest: str, ports: Dict[str, Dict]) -> Tuple[Optional[
         name = port_lookup[norm]
         return name, ports.get(name)
         
-    # 3. Fuzzy/Substring match (Crucial for messy AIS data)
+    # 3. Fuzzy/Substring match
     for canon_key, port_name in port_lookup.items():
         if canon_key and canon_key in norm:
             return port_name, ports.get(port_name)
@@ -249,9 +249,7 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
     api_data = fetch_with_retry(f"{RENDER_BASE}/vessel-full/{imo}")
     
     if api_data and api_data.get("found") is not False:
-        # --- CRITICAL: Dynamic Fields with Fallback ---
-        # If API returns None for Lat/Lon, we KEEP the value from static_cache (result)
-        # This ensures ETA calculations don't break on intermittent API blips
+        # CRITICAL: Preserve Lat/Lon if API returns None
         result["lat"] = safe_float(api_data.get("lat")) if api_data.get("lat") is not None else result.get("lat")
         result["lon"] = safe_float(api_data.get("lon")) if api_data.get("lon") is not None else result.get("lon")
         
@@ -260,7 +258,6 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
         result["last_pos_utc"] = api_data.get("last_pos_utc")
         result["destination"] = (api_data.get("destination") or "").strip()
         
-        # Update static fields if available
         result["name"] = (api_data.get("vessel_name") or api_data.get("name") or result.get("name") or f"IMO {imo}").strip()
         result["ship_type"] = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
         result["flag"] = (api_data.get("flag") or result.get("flag") or "").strip()
@@ -285,7 +282,6 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
     last = v.get("last_pos_utc")
     dest = v.get("destination", "")
 
-    # State template with Static Specs
     new_state = {
         "imo": imo, "name": name, "lat": lat, "lon": lon, "sog": sog, "cog": cog, 
         "last_pos_utc": last, "destination": dest, "done": False,
@@ -299,7 +295,6 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
         if prev: new_state["done"] = prev.get("done", False)
         return None, new_state
 
-    # Age Calculation
     age = age_minutes(last) if last else None
     age_txt = "N/A" if age is None else f"{age:.0f} min ago"
     too_old = age is not None and age > MAX_AIS_FOR_ETA_MIN
@@ -312,7 +307,7 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
     if dest_data:
         dest_dist = haversine_nm(lat, lon, dest_data["lat"], dest_data["lon"])
 
-    # --- ETA CALCULATION ---
+    # ETA Calculation
     eta_h, eta_utc_str, eta_text = None, None, None
     if dest_dist is not None and dest_dist > MIN_DISTANCE_FOR_ETA and sog >= MIN_SOG_FOR_ETA and not too_old:
         speed = min(max(sog, MIN_SOG_FOR_ETA), MAX_ETA_SOG_CAP)
@@ -331,7 +326,7 @@ def build_alert_and_state(v: Dict, ports: Dict, prev: Optional[Dict]) -> Tuple[O
         "eta_hours": eta_h, "eta_utc": eta_utc_str, "eta_text": eta_text
     })
 
-    # Arrival Check
+    # Arrival Check (Updated Logic: 35.5 NM Radius, < 1.0 Kn Speed)
     arrived = near_dist is not None and near_dist <= ARRIVAL_RADIUS_NM and sog <= ARRIVAL_SOG_THRESHOLD
     if arrived: new_state["done"] = True
 
