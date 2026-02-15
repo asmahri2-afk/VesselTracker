@@ -186,6 +186,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9714678": {
+    "imo": "9714678",
+    "name": "GENCO CONSTELLATION",
+    "flag": "Marshall Islands",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "199.86",
+    "beam_m": "32.31",
+    "deadweight_t": "63310",
+    "gross_tonnage": "36421",
+    "year_of_build": "2017"
+  },
   "9813046": {
     "imo": "9813046",
     "name": "DH BLOSSOMING",
