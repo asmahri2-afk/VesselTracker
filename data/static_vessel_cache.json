@@ -197,6 +197,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9648714": {
+    "imo": "9648714",
+    "name": "PRELUDE",
+    "flag": "Australia",
+    "ship_type": "Offshore Support Vessel",
+    "length_overall_m": "488.80",
+    "beam_m": "74.00",
+    "deadweight_t": "394330",
+    "gross_tonnage": "499167",
+    "year_of_build": "2017"
+  },
   "9698329": {
     "imo": "9698329",
     "name": "MARIA",
