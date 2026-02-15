@@ -98,6 +98,17 @@
     "gross_tonnage": "2658",
     "year_of_build": "2006"
   },
+  "9415650": {
+    "imo": "9415650",
+    "name": "AQUAMARINE PROGRESS",
+    "flag": "Singapore",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "230.00",
+    "beam_m": "36.60",
+    "deadweight_t": "54866",
+    "gross_tonnage": "48249",
+    "year_of_build": "2010"
+  },
   "9427079": {
     "imo": "9427079",
     "name": "BBC GREENLAND",
