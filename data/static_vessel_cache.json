@@ -54,6 +54,17 @@
     "gross_tonnage": "4450",
     "year_of_build": "1999"
   },
+  "9234276": {
+    "imo": "9234276",
+    "name": "VICTORIABORG",
+    "flag": "Netherlands",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "132.23",
+    "beam_m": "15.87",
+    "deadweight_t": "9826",
+    "gross_tonnage": "6361",
+    "year_of_build": "2001"
+  },
   "9310197": {
     "imo": "9310197",
     "name": "TINGIS",
