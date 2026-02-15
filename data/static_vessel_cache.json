@@ -76,6 +76,17 @@
     "gross_tonnage": "4471",
     "year_of_build": "2005"
   },
+  "9313503": {
+    "imo": "9313503",
+    "name": "FASSA",
+    "flag": "Cayman Islands",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "189.99",
+    "beam_m": "32.26",
+    "deadweight_t": "55447",
+    "gross_tonnage": "30936",
+    "year_of_build": "2006"
+  },
   "9364150": {
     "imo": "9364150",
     "name": "SINE BRES",
