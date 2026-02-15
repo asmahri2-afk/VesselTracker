@@ -262,7 +262,13 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
         result["ship_type"] = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
         result["flag"] = (api_data.get("flag") or result.get("flag") or "").strip()
         
-        for key in ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m"]:
+        # ADDED 'draught_m' and 'predicted_eta' to the key list below
+        keys_to_update = [
+            "deadweight_t", "gross_tonnage", "year_of_build", 
+            "length_overall_m", "beam_m", "draught_m", "predicted_eta"
+        ]
+        
+        for key in keys_to_update:
             if api_data.get(key) is not None:
                 result[key] = api_data.get(key)
             elif result.get(key) is None:
