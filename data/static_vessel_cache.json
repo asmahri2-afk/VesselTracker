@@ -284,5 +284,16 @@
     "deadweight_t": "9137",
     "gross_tonnage": "6822",
     "year_of_build": "2022"
+  },
+  "9996989": {
+    "imo": "9996989",
+    "name": "CMA CGM ANTIGONE",
+    "flag": "Malta",
+    "ship_type": "Container Ship",
+    "length_overall_m": "366.00",
+    "beam_m": "51.00",
+    "deadweight_t": "156100",
+    "gross_tonnage": "155768",
+    "year_of_build": "2025"
   }
 }
