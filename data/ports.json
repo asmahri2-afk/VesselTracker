@@ -5276,8 +5276,8 @@
   "MERSIN": {
     "lat": 36.8,
     "lon": 34.62,
-    "anchorage_depth": 3.4,
-    "cargo_pier_depth": 3.4
+    "anchorage_depth": 12.2,
+    "cargo_pier_depth": 9.10
   },
   "EL SEGUNDO": {
     "lat": 33.916667,
