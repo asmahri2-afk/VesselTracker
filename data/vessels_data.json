@@ -32,7 +32,7 @@
     "lon": -13.45486,
     "sog": 0.1,
     "cog": 20.0,
-    "last_pos_utc": "Feb 19, 2026 09:53 UTC",
+    "last_pos_utc": "Feb 19, 2026 10:36 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -82,9 +82,9 @@
     "name": "CHALLAH",
     "lat": 27.0,
     "lon": -14.0,
-    "sog": 11.3,
-    "cog": 60.0,
-    "last_pos_utc": "Feb 19, 2026 10:07 UTC",
+    "sog": 11.1,
+    "cog": 64.0,
+    "last_pos_utc": "Feb 19, 2026 11:10 UTC",
     "destination": "Laayoune (El Aaiun), Morocco",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -99,18 +99,18 @@
     "nearest_distance_nm": 29.671154565595245,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 29.671154565595245,
-    "eta_hours": 2.625765890760641,
-    "eta_utc": "2026-02-19 12:49:06 UTC",
-    "eta_text": "2h 38m"
+    "eta_hours": 2.6730769878914638,
+    "eta_utc": "2026-02-19 13:53:45 UTC",
+    "eta_text": "2h 40m"
   },
   "9996989": {
     "imo": "9996989",
     "name": "CMA CGM ANTIGONE",
     "lat": 35.0,
     "lon": 35.0,
-    "sog": 15.2,
-    "cog": 205.0,
-    "last_pos_utc": "Feb 19, 2026 10:10 UTC",
+    "sog": 10.1,
+    "cog": 206.0,
+    "last_pos_utc": "Feb 19, 2026 11:12 UTC",
     "destination": "Alexandria, Egypt",
     "done": false,
     "ship_type": "Container Ship",
@@ -125,8 +125,8 @@
     "nearest_distance_nm": 43.071073587004356,
     "destination_port": "ALEXANDRIA",
     "destination_distance_nm": 343.19993177373584,
-    "eta_hours": 22.578942879851045,
-    "eta_utc": "2026-02-20 08:46:19 UTC",
-    "eta_text": "22h 35m"
+    "eta_hours": 33.98019126472632,
+    "eta_utc": "2026-02-20 21:12:12 UTC",
+    "eta_text": "1d 9h"
   }
 }
