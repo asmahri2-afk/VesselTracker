@@ -1,12 +1,12 @@
 {
   "7325461": {
     "imo": "7325461",
-    "name": "DURA BULK",
-    "lat": 27.0,
-    "lon": -13.0,
+    "name": "Unknown",
+    "lat": null,
+    "lon": null,
     "sog": 0.0,
-    "cog": 360.0,
-    "last_pos_utc": "Feb 20, 2026 15:34 UTC",
+    "cog": null,
+    "last_pos_utc": null,
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -16,14 +16,7 @@
     "year_of_build": "1973",
     "length_overall_m": "88.85",
     "beam_m": "13.28",
-    "draught_m": "6.1 m",
-    "nearest_port": "LAAYOUNE",
-    "nearest_distance_nm": 24.942275804881042,
-    "destination_port": null,
-    "destination_distance_nm": null,
-    "eta_hours": null,
-    "eta_utc": null,
-    "eta_text": null
+    "draught_m": null
   },
   "9409754": {
     "imo": "9409754",
@@ -58,7 +51,7 @@
     "lon": -16.49075,
     "sog": 0.2,
     "cog": 42.0,
-    "last_pos_utc": "Feb 20, 2026 15:45 UTC",
+    "last_pos_utc": "Feb 20, 2026 16:51 UTC",
     "destination": "Puerto de Granadilla, Spain",
     "done": true,
     "ship_type": "General Cargo Ship",
