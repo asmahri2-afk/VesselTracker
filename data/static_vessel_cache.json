@@ -274,6 +274,17 @@
     "gross_tonnage": "34837",
     "year_of_build": "2012"
   },
+  "9645841": {
+    "imo": "9645841",
+    "name": "HOPTERIX",
+    "flag": "Barbados",
+    "ship_type": "-",
+    "length_overall_m": "108.24",
+    "beam_m": "17.80",
+    "deadweight_t": "7541",
+    "gross_tonnage": "5520",
+    "year_of_build": "2012"
+  },
   "9648714": {
     "imo": "9648714",
     "name": "PRELUDE",
