@@ -65,6 +65,17 @@
     "gross_tonnage": "6361",
     "year_of_build": "2001"
   },
+  "9303091": {
+    "imo": "9303091",
+    "name": "NAFISA JAHAN",
+    "flag": "Bangladesh",
+    "ship_type": "-",
+    "length_overall_m": "189.99",
+    "beam_m": "32.26",
+    "deadweight_t": "56070",
+    "gross_tonnage": "31236",
+    "year_of_build": "2006"
+  },
   "9310197": {
     "imo": "9310197",
     "name": "TINGIS",
