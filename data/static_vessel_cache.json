@@ -318,6 +318,17 @@
     "gross_tonnage": "36421",
     "year_of_build": "2017"
   },
+  "9780964": {
+    "imo": "9780964",
+    "name": "SIDER HARMONY",
+    "flag": "Panama",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "179.99",
+    "beam_m": "30.00",
+    "deadweight_t": "38581",
+    "gross_tonnage": "23703",
+    "year_of_build": "2020"
+  },
   "9813046": {
     "imo": "9813046",
     "name": "DH BLOSSOMING",
