@@ -120,6 +120,17 @@
     "gross_tonnage": "30936",
     "year_of_build": "2006"
   },
+  "9342396": {
+    "imo": "9342396",
+    "name": "HELENA KOSAN",
+    "flag": "Malta",
+    "ship_type": "-",
+    "length_overall_m": "115.00",
+    "beam_m": "18.60",
+    "deadweight_t": "8555",
+    "gross_tonnage": "7465",
+    "year_of_build": "2007"
+  },
   "9364150": {
     "imo": "9364150",
     "name": "SINE BRES",
