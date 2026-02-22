@@ -164,6 +164,17 @@
     "gross_tonnage": "48249",
     "year_of_build": "2010"
   },
+  "9420306": {
+    "imo": "9420306",
+    "name": "SEA PROSPECT",
+    "flag": "Singapore",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "189.90",
+    "beam_m": "32.26",
+    "deadweight_t": "55457",
+    "gross_tonnage": "30816",
+    "year_of_build": "2010"
+  },
   "9427079": {
     "imo": "9427079",
     "name": "BBC GREENLAND",
