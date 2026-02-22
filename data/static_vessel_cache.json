@@ -1,4 +1,15 @@
 {
+  "1026702": {
+    "imo": "1026702",
+    "name": "IBN SINA II",
+    "flag": "Morocco",
+    "ship_type": "-",
+    "length_overall_m": "22.00",
+    "beam_m": "7.00",
+    "deadweight_t": "-",
+    "gross_tonnage": "152",
+    "year_of_build": "2023"
+  },
   "1049651": {
     "imo": "1049651",
     "name": "BOUKRAA-I",
