@@ -54,6 +54,17 @@
     "gross_tonnage": "3796",
     "year_of_build": "1996"
   },
+  "9198965": {
+    "imo": "9198965",
+    "name": "PARANA",
+    "flag": "Netherlands",
+    "ship_type": "-",
+    "length_overall_m": "75.65",
+    "beam_m": "15.03",
+    "deadweight_t": "3205",
+    "gross_tonnage": "2111",
+    "year_of_build": "2000"
+  },
   "9212448": {
     "imo": "9212448",
     "name": "STORM I",
