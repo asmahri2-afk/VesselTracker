@@ -142,6 +142,17 @@
     "gross_tonnage": "4808",
     "year_of_build": "2008"
   },
+  "9444936": {
+    "imo": "9444936",
+    "name": "MRC EMIRHAN",
+    "flag": "Malta",
+    "ship_type": "-",
+    "length_overall_m": "107.34",
+    "beam_m": "15.80",
+    "deadweight_t": "6128",
+    "gross_tonnage": "3999",
+    "year_of_build": "2008"
+  },
   "9462093": {
     "imo": "9462093",
     "name": "PS OUFELLA",
