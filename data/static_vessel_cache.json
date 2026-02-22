@@ -208,6 +208,17 @@
     "gross_tonnage": "3999",
     "year_of_build": "2008"
   },
+  "9461910": {
+    "imo": "9461910",
+    "name": "MED EMRE",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.93",
+    "beam_m": "17.20",
+    "deadweight_t": "8267",
+    "gross_tonnage": "5645",
+    "year_of_build": "2019"
+  },
   "9462093": {
     "imo": "9462093",
     "name": "PS OUFELLA",
