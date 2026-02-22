@@ -21,6 +21,17 @@
     "gross_tonnage": "301",
     "year_of_build": "2025"
   },
+  "1051707": {
+    "imo": "1051707",
+    "name": "YAGIZ D",
+    "flag": "Panama",
+    "ship_type": "-",
+    "length_overall_m": "109.00",
+    "beam_m": "18.00",
+    "deadweight_t": "7799",
+    "gross_tonnage": "5409",
+    "year_of_build": "2024"
+  },
   "6417499": {
     "imo": "6417499",
     "name": "NAVE SANTA MARIA",
