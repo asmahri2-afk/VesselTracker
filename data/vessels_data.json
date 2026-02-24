@@ -1,13 +1,13 @@
 {
   "7325461": {
     "imo": "7325461",
-    "name": "DURA BULK",
-    "lat": 28.0,
-    "lon": -13.0,
-    "sog": 8.8,
-    "cog": 55.4,
-    "last_pos_utc": "Feb 24, 2026 11:22 UTC",
-    "destination": "Agadir, Morocco",
+    "name": "Unknown",
+    "lat": null,
+    "lon": null,
+    "sog": 0.0,
+    "cog": null,
+    "last_pos_utc": null,
+    "destination": "",
     "done": false,
     "ship_type": "General Cargo Ship",
     "flag": "Panama",
@@ -16,14 +16,7 @@
     "year_of_build": "1973",
     "length_overall_m": "88.85",
     "beam_m": "13.28",
-    "draught_m": "3.4 m",
-    "nearest_port": "TARFAYA",
-    "nearest_distance_nm": 5.588911320504625,
-    "destination_port": "AGADIR",
-    "destination_distance_nm": 226.66441002178703,
-    "eta_hours": 25.757319320657615,
-    "eta_utc": "2026-02-25 13:08:31 UTC",
-    "eta_text": "1d 1h"
+    "draught_m": null
   },
   "9409754": {
     "imo": "9409754",
@@ -82,9 +75,9 @@
     "name": "MED EMRE",
     "lat": 32.0,
     "lon": -10.0,
-    "sog": 12.0,
-    "cog": 212.4,
-    "last_pos_utc": "Feb 24, 2026 11:22 UTC",
+    "sog": 11.6,
+    "cog": 209.9,
+    "last_pos_utc": "Feb 24, 2026 12:04 UTC",
     "destination": "Dakhla, Morocco",
     "done": false,
     "ship_type": "Chemical/Oil Products Tanker",
@@ -99,9 +92,9 @@
     "nearest_distance_nm": 31.673118201267297,
     "destination_port": "DAKHLA",
     "destination_distance_nm": 591.8264513433597,
-    "eta_hours": 49.318870945279976,
-    "eta_utc": "2026-02-26 12:42:19 UTC",
-    "eta_text": "2d 1h"
+    "eta_hours": 51.019521667531016,
+    "eta_utc": "2026-02-26 15:05:40 UTC",
+    "eta_text": "2d 3h"
   },
   "9501655": {
     "imo": "9501655",
@@ -134,9 +127,9 @@
     "name": "CHALLAH",
     "lat": 36.0,
     "lon": -2.0,
-    "sog": 12.7,
-    "cog": 83.9,
-    "last_pos_utc": "Feb 24, 2026 11:22 UTC",
+    "sog": 12.8,
+    "cog": 53.0,
+    "last_pos_utc": "Feb 24, 2026 12:03 UTC",
     "destination": "Cartagena, Spain",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -151,9 +144,9 @@
     "nearest_distance_nm": 51.68684609274816,
     "destination_port": "CARTAGENA",
     "destination_distance_nm": 107.78953553355103,
-    "eta_hours": 8.487365002641814,
-    "eta_utc": "2026-02-24 19:52:30 UTC",
-    "eta_text": "8h 29m"
+    "eta_hours": 8.421057463558673,
+    "eta_utc": "2026-02-24 20:29:49 UTC",
+    "eta_text": "8h 25m"
   },
   "9996989": {
     "imo": "9996989",
