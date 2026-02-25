@@ -142,6 +142,17 @@
     "gross_tonnage": "7465",
     "year_of_build": "2007"
   },
+  "9346407": {
+    "imo": "9346407",
+    "name": "CGAS MARGRETHE",
+    "flag": "Malta",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "99.98",
+    "beam_m": "17.20",
+    "deadweight_t": "4970",
+    "gross_tonnage": "4253",
+    "year_of_build": "2006"
+  },
   "9364150": {
     "imo": "9364150",
     "name": "SINE BRES",
