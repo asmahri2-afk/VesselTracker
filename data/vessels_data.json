@@ -1,13 +1,13 @@
 {
   "7325461": {
     "imo": "7325461",
-    "name": "Unknown",
-    "lat": null,
-    "lon": null,
-    "sog": 0.0,
-    "cog": null,
-    "last_pos_utc": null,
-    "destination": "",
+    "name": "DURA BULK",
+    "lat": 30.0,
+    "lon": -10.0,
+    "sog": 0.2,
+    "cog": 314.5,
+    "last_pos_utc": "Feb 25, 2026 21:53 UTC",
+    "destination": "Agadir, Morocco",
     "done": true,
     "ship_type": "General Cargo Ship",
     "flag": "Panama",
@@ -16,7 +16,14 @@
     "year_of_build": "1973",
     "length_overall_m": "88.85",
     "beam_m": "13.28",
-    "draught_m": null
+    "draught_m": "3.4 m",
+    "nearest_port": "AGADIR ANCH",
+    "nearest_distance_nm": 24.6976696829147,
+    "destination_port": "AGADIR",
+    "destination_distance_nm": 30.148325352341615,
+    "eta_hours": null,
+    "eta_utc": null,
+    "eta_text": null
   },
   "9409754": {
     "imo": "9409754",
@@ -93,7 +100,7 @@
     "destination_port": "DAKHLA",
     "destination_distance_nm": 207.19184303038483,
     "eta_hours": 17.1232928124285,
-    "eta_utc": "2026-02-26 14:11:35 UTC",
+    "eta_utc": "2026-02-26 15:05:14 UTC",
     "eta_text": "17h 7m"
   },
   "9501655": {
@@ -125,13 +132,13 @@
   "9933913": {
     "imo": "9933913",
     "name": "CHALLAH",
-    "lat": 38.0,
+    "lat": 37.0,
     "lon": -1.0,
-    "sog": 0.0,
-    "cog": 66.0,
-    "last_pos_utc": "Feb 25, 2026 20:22 UTC",
+    "sog": 12.2,
+    "cog": 221.3,
+    "last_pos_utc": "Feb 25, 2026 21:57 UTC",
     "destination": "Dakhla, Morocco",
-    "done": true,
+    "done": false,
     "ship_type": "Oil Products Tanker",
     "flag": "Morocco",
     "deadweight_t": "9137",
@@ -140,13 +147,13 @@
     "length_overall_m": "117.53",
     "beam_m": "19.50",
     "draught_m": "5.3 m",
-    "nearest_port": "TORREVIEJA",
-    "nearest_distance_nm": 15.118764842833087,
+    "nearest_port": "HORNILLO",
+    "nearest_distance_nm": 35.61779435329738,
     "destination_port": "DAKHLA",
-    "destination_distance_nm": 1152.4121599340754,
-    "eta_hours": null,
-    "eta_utc": null,
-    "eta_text": null
+    "destination_distance_nm": 1111.460043741679,
+    "eta_hours": 91.10328227390814,
+    "eta_utc": "2026-03-01 17:04:05 UTC",
+    "eta_text": "3d 19h"
   },
   "9996989": {
     "imo": "9996989",
@@ -171,7 +178,7 @@
     "destination_port": "JEDDAH",
     "destination_distance_nm": 610.8522988599195,
     "eta_hours": 49.66278852519671,
-    "eta_utc": "2026-02-27 22:44:05 UTC",
+    "eta_utc": "2026-02-27 23:37:43 UTC",
     "eta_text": "2d 1h"
   }
 }
