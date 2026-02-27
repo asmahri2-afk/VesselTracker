@@ -208,6 +208,17 @@
     "gross_tonnage": "4808",
     "year_of_build": "2008"
   },
+  "9443061": {
+    "imo": "9443061",
+    "name": "SEN ARCHE",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "110.00",
+    "beam_m": "18.60",
+    "deadweight_t": "8956",
+    "gross_tonnage": "5291",
+    "year_of_build": "2008"
+  },
   "9444936": {
     "imo": "9444936",
     "name": "MRC EMIRHAN",
