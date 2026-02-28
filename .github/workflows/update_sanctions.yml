@@ -80,26 +80,44 @@ jobs:
                   headers={"User-Agent": "Mozilla/5.0"}
               )
               with urllib.request.urlopen(req, timeout=60) as r:
-                  tree = ET.parse(r)
+                  raw = r.read()
+              # Debug: dump unique tags and first IMO context found
+              tree = ET.fromstring(raw)
+              # Scan entire XML text for IMO patterns — field name varies by version
+              full_text = raw.decode("utf-8", errors="replace")
               before = len(entries)
-              for e in tree.getroot().iter():
-                  if not e.tag.endswith(("INDIVIDUAL", "ENTITY")):
-                      continue
-                  name_el = e.find("FIRST_NAME")
-                  if name_el is None:
-                      name_el = e.find("NAME_ORIGINAL_SCRIPT")
-                  name = (name_el.text or "") if name_el is not None else ""
-                  un_type = ""
-                  ut = e.find("UN_LIST_TYPE")
-                  if ut is not None:
-                      un_type = ut.text or "UN"
-                  for info in e.iter():
-                      if not info.tag.endswith("OTHER_INFORMATION"):
-                          continue
-                      m = re.search(r'IMO[:\s#]*(\d{7})', info.text or "", re.I)
-                      if m:
-                          add(m.group(1), name, "UN Security Council", un_type or "UN")
+              # Strategy 1: regex over raw XML — most robust
+              # Capture the enclosing ENTITY/INDIVIDUAL name + IMO
+              # Walk all ENTITY/INDIVIDUAL elements and scan ALL child text
+              def iter_entries(root):
+                  for elem in root.iter():
+                      tag = elem.tag.split("}")[-1].upper()
+                      if tag in ("INDIVIDUAL", "ENTITY"):
+                          yield elem
+              for e in iter_entries(tree):
+                  # Collect name
+                  name = ""
+                  for tag in ("FIRST_NAME", "SECOND_NAME", "THIRD_NAME", "NAME_ORIGINAL_SCRIPT", "WHOLE_NAME"):
+                      el = e.find(f".//{tag}") or e.find(tag)
+                      if el is not None and el.text:
+                          name = el.text.strip()
+                          break
+                  # Get list type
+                  ut = e.find(".//UN_LIST_TYPE") or e.find("UN_LIST_TYPE")
+                  un_type = (ut.text or "UN") if ut is not None else "UN"
+                  # Scan ALL text content in this entry for IMO numbers
+                  entry_xml = ET.tostring(e, encoding="unicode")
+                  for m in re.finditer(r'IMO\s*[:\-#No\.]*\s*(\d{7})', entry_xml, re.I):
+                      add(m.group(1), name, "UN Security Council", un_type)
+              # Strategy 2: fallback — scan raw XML with surrounding context
+              if len(entries) - before == 0:
+                  print("  UN strategy 1 found nothing, trying raw scan...", flush=True)
+                  for m in re.finditer(r'IMO\s*[:\-#No\.]*\s*(\d{7})', full_text, re.I):
+                      add(m.group(1), "UN Vessel", "UN Security Council", "UN")
               print(f"  UN: {len(entries)-before} new IMOs", flush=True)
+              # Debug: show unique tags seen
+              tags = set(el.tag.split("}")[-1] for el in tree.iter())
+              print(f"  UN XML tags: {sorted(tags)[:30]}", flush=True)
           except Exception as ex:
               print(f"  UN failed: {ex}", flush=True)
 
