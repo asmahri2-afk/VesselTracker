@@ -87,17 +87,6 @@
     "gross_tonnage": "3796",
     "year_of_build": "1996"
   },
-  "9139127": {
-    "imo": "9139127",
-    "name": "YUSUF BEY",
-    "flag": "St Kitts & Nevis",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "100.50",
-    "beam_m": "16.50",
-    "deadweight_t": "4766",
-    "gross_tonnage": "3850",
-    "year_of_build": "1997"
-  },
   "9198965": {
     "imo": "9198965",
     "name": "PARANA",
@@ -141,6 +130,17 @@
     "deadweight_t": "72768",
     "gross_tonnage": "41589",
     "year_of_build": "2004"
+  },
+  "9288368": {
+    "imo": "9288368",
+    "name": "ANNA MARIA P",
+    "flag": "Liberia",
+    "ship_type": "Oil Products Tanker",
+    "length_overall_m": "182.50",
+    "beam_m": "32.20",
+    "deadweight_t": "47278",
+    "gross_tonnage": "26924",
+    "year_of_build": "2005"
   },
   "9303091": {
     "imo": "9303091",
