@@ -22286,8 +22286,8 @@
   "TAN TAN": {
     "lat": 28.483825,
     "lon": -11.383329,
-    "anchorage_depth": 0.0,
-    "cargo_pier_depth": 0.0
+    "anchorage_depth": 18.0,
+    "cargo_pier_depth": 7.0
   },
   "TARFAYA": {
     "lat": 27.9373,
