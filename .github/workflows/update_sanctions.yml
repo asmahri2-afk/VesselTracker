@@ -15,13 +15,14 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch & parse sanctions (all sources via OpenSanctions + OFAC direct)
+      - name: Fetch & parse sanctions (OpenSanctions + OFAC direct)
         run: |
           python3 - << 'PYEOF'
           import urllib.request, csv, json, re, io, xml.etree.ElementTree as ET
-          from datetime import datetime, timezone
+          from datetime import datetime, timezone, collections
+          from collections import Counter
 
-          entries = {}  # imo -> {imo, name, lists, program}
+          entries = {}
 
           def add(imo, name, lst, program=""):
               imo = re.sub(r'\D', '', str(imo))
@@ -32,11 +33,34 @@ jobs:
               if lst not in entries[imo]["lists"]:
                   entries[imo]["lists"].append(lst)
 
+          # Dataset prefix -> friendly label (substring match, order matters)
+          DATASET_MAP = [
+              ("us_ofac",    "OFAC"),
+              ("eu_",        "EU"),
+              ("gb_",        "UK"),
+              ("un_",        "UN"),
+              ("au_",        "Australia"),
+              ("ca_",        "Canada"),
+              ("ch_",        "Switzerland"),
+              ("jp_",        "Japan"),
+              ("ua_",        "Ukraine"),
+              ("ru_",        "Russia"),
+          ]
+
+          def datasets_to_lists(datasets_str):
+              matched = set()
+              result = []
+              for ds in datasets_str.split(";"):
+                  ds = ds.strip().lower()
+                  for prefix, label in DATASET_MAP:
+                      if ds.startswith(prefix) and label not in matched:
+                          result.append(label)
+                          matched.add(label)
+                          break
+              return result or ["Sanctions"]
+
           # SOURCE 1: OpenSanctions consolidated CSV
-          # Free for non-commercial use. Covers: OFAC, EU (all Russia packages),
-          # UK OFSI, UN 1718 (North Korea), Australia, Canada, Switzerland, Japan, Ukraine, 80+ more.
-          # https://www.opensanctions.org/datasets/sanctions/
-          print("Fetching OpenSanctions consolidated CSV...", flush=True)
+          print("Fetching OpenSanctions CSV...", flush=True)
           try:
               req = urllib.request.Request(
                   "https://data.opensanctions.org/datasets/latest/sanctions/targets.simple.csv",
@@ -46,59 +70,57 @@ jobs:
                   raw = r.read().decode("utf-8")
 
               reader = csv.DictReader(io.StringIO(raw))
+              # Print headers for debugging
+              fieldnames = reader.fieldnames or []
+              print(f"  CSV columns: {fieldnames}", flush=True)
+
               os_count = 0
+              schema_counts = Counter()
               for row in reader:
                   schema = row.get("schema", "")
-                  if schema not in ("Vessel", "Ship"):
+                  schema_counts[schema] += 1
+
+                  # Accept any vessel/ship schema
+                  if not any(s in schema.lower() for s in ("vessel", "ship")):
                       continue
+
+                  # Find IMO — try every column for a 7-digit number
                   imo_val = ""
-                  for col in ("imoNumber", "registrationNumber", "id"):
-                      val = row.get(col, "")
-                      for part in val.split(";"):
-                          part = re.sub(r'\D', '', part.strip())
+                  # Priority columns first
+                  for col in ("imoNumber", "registrationNumber", "mmsi", "id", "caption", "name"):
+                      val = row.get(col, "") or ""
+                      for part in re.split(r'[;,\s]+', val):
+                          part = re.sub(r'\D', '', part)
                           if len(part) == 7:
                               imo_val = part
                               break
                       if imo_val:
                           break
+                  # Fallback: scan ALL columns
                   if not imo_val:
                       for col, val in row.items():
-                          m = re.search(r'\b(\d{7})\b', val or "")
+                          m = re.search(r'\bIMO[:\s#-]*(\d{7})\b', val or "", re.I)
                           if m:
                               imo_val = m.group(1)
                               break
                   if not imo_val:
                       continue
-                  name = row.get("name", "") or row.get("caption", "")
-                  datasets = row.get("datasets", "")
-                  mapping = {
-                      "us_ofac": "OFAC", "eu_fsf": "EU", "eu_": "EU",
-                      "gb_hmt": "UK", "un_": "UN", "au_dfat": "Australia",
-                      "ca_sema": "Canada", "ch_seco": "Switzerland",
-                      "jp_meti": "Japan", "ua_sfms": "Ukraine",
-                  }
-                  matched = set()
-                  list_names = []
-                  for ds in datasets.split(";"):
-                      ds = ds.strip()
-                      for prefix, label in mapping.items():
-                          if ds.startswith(prefix) and label not in matched:
-                              list_names.append(label)
-                              matched.add(label)
-                              break
-                  if not list_names:
-                      list_names = ["Sanctions"]
-                  for lst in list_names:
+
+                  name = (row.get("name") or row.get("caption") or "").split(";")[0].strip()
+                  lists = datasets_to_lists(row.get("datasets", ""))
+                  for lst in lists:
                       add(imo_val, name, lst)
                   os_count += 1
 
-              print(f"  OpenSanctions: {os_count} vessel rows -> {len(entries)} unique IMOs", flush=True)
+              print(f"  Vessel rows processed: {os_count} -> {len(entries)} unique IMOs", flush=True)
+              top_schemas = schema_counts.most_common(8)
+              print(f"  Schema breakdown: {top_schemas}", flush=True)
 
           except Exception as ex:
               print(f"  OpenSanctions failed: {ex}", flush=True)
 
-          # SOURCE 2: OFAC SDN XML direct (authoritative fallback)
-          print("Fetching OFAC SDN XML (authoritative)...", flush=True)
+          # SOURCE 2: OFAC SDN XML (direct, authoritative)
+          print("Fetching OFAC SDN XML...", flush=True)
           before = len(entries)
           try:
               req = urllib.request.Request(
@@ -121,7 +143,7 @@ jobs:
                       id_type, id_num = "", ""
                       for child in id_el:
                           tag = child.tag.split("}")[-1]
-                          if tag == "idType":    id_type = (child.text or "").lower()
+                          if tag == "idType":     id_type = (child.text or "").lower()
                           elif tag == "idNumber": id_num  = child.text or ""
                       if "imo" in id_type or "vessel" in id_type:
                           add(id_num, name, "OFAC", prog)
@@ -135,13 +157,12 @@ jobs:
           output = {
               "updated": datetime.now(timezone.utc).isoformat(),
               "total": len(entries),
-              "sources": ["OpenSanctions (OFAC, EU all packages, UK, UN 1718, AU, CA, CH, JP, UA, 80+ lists)", "OFAC SDN direct"],
+              "sources": ["OpenSanctions consolidated (OFAC, EU, UK, UN, AU, CA, CH, JP, UA)", "OFAC SDN direct"],
               "entries": sorted(entries.values(), key=lambda x: x["imo"])
           }
           with open("data/sanctioned_imos.json", "w") as f:
               json.dump(output, f, separators=(",", ":"))
 
-          from collections import Counter
           counter = Counter()
           for e in entries.values():
               for l in e["lists"]:
