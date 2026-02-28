@@ -65,6 +65,17 @@
     "gross_tonnage": "1757",
     "year_of_build": "1974"
   },
+  "7800461": {
+    "imo": "7800461",
+    "name": "REKA XII",
+    "flag": "St Kitts & Nevis",
+    "ship_type": "Tug",
+    "length_overall_m": "28.42",
+    "beam_m": "8.50",
+    "deadweight_t": "-",
+    "gross_tonnage": "194",
+    "year_of_build": "1979"
+  },
   "9128013": {
     "imo": "9128013",
     "name": "RIGHT STEP",
@@ -295,17 +306,6 @@
     "deadweight_t": "1792",
     "gross_tonnage": "1055",
     "year_of_build": "2007"
-  },
-  "9500041": {
-    "imo": "9500041",
-    "name": "RB DYLAN",
-    "flag": "Marshall Islands",
-    "ship_type": "Bulk Carrier",
-    "length_overall_m": "189.99",
-    "beam_m": "32.25",
-    "deadweight_t": "56129",
-    "gross_tonnage": "31754",
-    "year_of_build": "2012"
   },
   "9501655": {
     "imo": "9501655",
