@@ -87,6 +87,17 @@
     "gross_tonnage": "3796",
     "year_of_build": "1996"
   },
+  "9139127": {
+    "imo": "9139127",
+    "name": "YUSUF BEY",
+    "flag": "St Kitts & Nevis",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "100.50",
+    "beam_m": "16.50",
+    "deadweight_t": "4766",
+    "gross_tonnage": "3850",
+    "year_of_build": "1997"
+  },
   "9198965": {
     "imo": "9198965",
     "name": "PARANA",
