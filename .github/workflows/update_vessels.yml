@@ -1,5 +1,4 @@
 name: Update vessels data
-
 on:
   push:
     paths:
@@ -7,7 +6,6 @@ on:
   schedule:
     - cron: "30 5-22 * * *"   # runs
   workflow_dispatch:
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -16,28 +14,22 @@ jobs:
     env:
       CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
       CALLMEBOT_API_KEY: ${{ secrets.CALLMEBOT_API_KEY }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           pip install requests beautifulsoup4
-
       - name: Run scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_API_KEY }}
         run: |
           python scrape_vesselfinder.py
-
-
       - name: Commit & push changes
         run: |
           git config user.name "github-actions[bot]"
@@ -48,6 +40,7 @@ jobs:
           if [[ -n "$(git status --porcelain data/vessels_data.json)" ]]; then
             git add data/vessels_data.json
             git commit -m "Update vessels data #${{ github.run_number }}"
+            git pull --rebase origin main
             git push origin main
           else
             echo "No changes to commit"
