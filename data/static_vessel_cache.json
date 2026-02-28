@@ -54,6 +54,17 @@
     "gross_tonnage": "2239",
     "year_of_build": "1973"
   },
+  "7389704": {
+    "imo": "7389704",
+    "name": "RYE SONG GANG 1",
+    "flag": "Unknown",
+    "ship_type": "Oil Products Tanker",
+    "length_overall_m": "85.00",
+    "beam_m": "12.00",
+    "deadweight_t": "3003",
+    "gross_tonnage": "1757",
+    "year_of_build": "1974"
+  },
   "9128013": {
     "imo": "9128013",
     "name": "RIGHT STEP",
