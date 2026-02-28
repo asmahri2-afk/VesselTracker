@@ -131,17 +131,6 @@
     "gross_tonnage": "41589",
     "year_of_build": "2004"
   },
-  "9288368": {
-    "imo": "9288368",
-    "name": "ANNA MARIA P",
-    "flag": "Liberia",
-    "ship_type": "Oil Products Tanker",
-    "length_overall_m": "182.50",
-    "beam_m": "32.20",
-    "deadweight_t": "47278",
-    "gross_tonnage": "26924",
-    "year_of_build": "2005"
-  },
   "9303091": {
     "imo": "9303091",
     "name": "NAFISA JAHAN",
@@ -426,6 +415,17 @@
     "beam_m": "32.31",
     "deadweight_t": "63310",
     "gross_tonnage": "36421",
+    "year_of_build": "2017"
+  },
+  "9777541": {
+    "imo": "9777541",
+    "name": "MAYOURY",
+    "flag": "Luxembourg",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.50",
+    "beam_m": "21.60",
+    "deadweight_t": "9194",
+    "gross_tonnage": "6141",
     "year_of_build": "2017"
   },
   "9780964": {
