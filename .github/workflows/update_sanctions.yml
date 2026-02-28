@@ -33,27 +33,37 @@ jobs:
               if lst not in entries[imo]["lists"]:
                   entries[imo]["lists"].append(lst)
 
-          # Dataset prefix -> friendly label (substring match, order matters)
+          # Dataset name -> friendly label (substring match on full names, tab-separated)
           DATASET_MAP = [
-              ("us_ofac",    "OFAC"),
-              ("eu_",        "EU"),
-              ("gb_",        "UK"),
-              ("un_",        "UN"),
-              ("au_",        "Australia"),
-              ("ca_",        "Canada"),
-              ("ch_",        "Switzerland"),
-              ("jp_",        "Japan"),
-              ("ua_",        "Ukraine"),
-              ("ru_",        "Russia"),
+              ("US OFAC",        "OFAC"),
+              ("EU ",            "EU"),
+              ("UK ",            "UK"),
+              ("United Kingdom", "UK"),
+              ("UN ",            "UN"),
+              ("United Nations", "UN"),
+              ("Australian",     "Australia"),
+              ("Canadian",       "Canada"),
+              ("Swiss",          "Switzerland"),
+              ("Japan",          "Japan"),
+              ("Ukraine",        "Ukraine"),
+              ("us_ofac",        "OFAC"),
+              ("eu_",            "EU"),
+              ("gb_",            "UK"),
+              ("un_",            "UN"),
+              ("au_",            "Australia"),
+              ("ca_",            "Canada"),
           ]
 
           def datasets_to_lists(datasets_str):
               matched = set()
               result = []
-              for ds in datasets_str.split(";"):
-                  ds = ds.strip().lower()
-                  for prefix, label in DATASET_MAP:
-                      if ds.startswith(prefix) and label not in matched:
+              # Separator can be tab or semicolon
+              for ds in re.split(r'[\t;]+', datasets_str):
+                  ds = ds.strip()
+                  if not ds:
+                      continue
+                  for substring, label in DATASET_MAP:
+                      if substring.lower() in ds.lower() and label not in matched:
                           result.append(label)
                           matched.add(label)
                           break
