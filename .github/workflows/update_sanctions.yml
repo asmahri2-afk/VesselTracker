@@ -85,7 +85,9 @@ jobs:
               for e in tree.getroot().iter():
                   if not e.tag.endswith(("INDIVIDUAL", "ENTITY")):
                       continue
-                  name_el = e.find("FIRST_NAME") or e.find("NAME_ORIGINAL_SCRIPT")
+                  name_el = e.find("FIRST_NAME")
+                  if name_el is None:
+                      name_el = e.find("NAME_ORIGINAL_SCRIPT")
                   name = (name_el.text or "") if name_el is not None else ""
                   un_type = ""
                   ut = e.find("UN_LIST_TYPE")
