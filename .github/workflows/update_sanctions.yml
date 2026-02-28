@@ -75,46 +75,40 @@ jobs:
               print(f"  CSV columns: {fieldnames}", flush=True)
 
               os_count = 0
-              schema_counts = Counter()
               for row in reader:
                   schema = row.get("schema", "")
-                  schema_counts[schema] += 1
-
-                  # Accept any vessel/ship schema
                   if not any(s in schema.lower() for s in ("vessel", "ship")):
                       continue
 
-                  # Find IMO — try every column for a 7-digit number
+                  # IMO is in 'identifiers' column e.g. "imo:1234567;mmsi:123456789"
                   imo_val = ""
-                  # Priority columns first
-                  for col in ("imoNumber", "registrationNumber", "mmsi", "id", "caption", "name"):
-                      val = row.get(col, "") or ""
-                      for part in re.split(r'[;,\s]+', val):
-                          part = re.sub(r'\D', '', part)
-                          if len(part) == 7:
-                              imo_val = part
-                              break
-                      if imo_val:
-                          break
-                  # Fallback: scan ALL columns
+                  identifiers = row.get("identifiers", "") or ""
+                  m = re.search(r'imo:(\d{7})', identifiers, re.I)
+                  if m:
+                      imo_val = m.group(1)
                   if not imo_val:
-                      for col, val in row.items():
-                          m = re.search(r'\bIMO[:\s#-]*(\d{7})\b', val or "", re.I)
-                          if m:
-                              imo_val = m.group(1)
+                      for part in re.split(r'[;,\s]+', identifiers):
+                          digits = re.sub(r'\D', '', part)
+                          if len(digits) == 7:
+                              imo_val = digits
+                              break
+                  if not imo_val:
+                      for col in ("name", "sanctions", "aliases"):
+                          m2 = re.search(r'\b(\d{7})\b', row.get(col, "") or "")
+                          if m2:
+                              imo_val = m2.group(1)
                               break
                   if not imo_val:
                       continue
 
-                  name = (row.get("name") or row.get("caption") or "").split(";")[0].strip()
-                  lists = datasets_to_lists(row.get("datasets", ""))
+                  name = (row.get("name") or "").split(";")[0].strip()
+                  # 'dataset' column e.g. "us_ofac_sdn" or "eu_fsf;gb_hmt"
+                  lists = datasets_to_lists(row.get("dataset", ""))
                   for lst in lists:
                       add(imo_val, name, lst)
                   os_count += 1
 
               print(f"  Vessel rows processed: {os_count} -> {len(entries)} unique IMOs", flush=True)
-              top_schemas = schema_counts.most_common(8)
-              print(f"  Schema breakdown: {top_schemas}", flush=True)
 
           except Exception as ex:
               print(f"  OpenSanctions failed: {ex}", flush=True)
