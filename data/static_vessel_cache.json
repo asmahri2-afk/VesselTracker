@@ -417,6 +417,17 @@
     "gross_tonnage": "6822",
     "year_of_build": "2022"
   },
+  "9983865": {
+    "imo": "9983865",
+    "name": "CAMEROUN EXPRESS",
+    "flag": "Singapore",
+    "ship_type": "Refrigerated Cargo Ship",
+    "length_overall_m": "125.00",
+    "beam_m": "21.00",
+    "deadweight_t": "14565",
+    "gross_tonnage": "13287",
+    "year_of_build": "2024"
+  },
   "9996989": {
     "imo": "9996989",
     "name": "CMA CGM ANTIGONE",
