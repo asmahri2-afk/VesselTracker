@@ -384,6 +384,17 @@
     "gross_tonnage": "499167",
     "year_of_build": "2017"
   },
+  "9668922": {
+    "imo": "9668922",
+    "name": "PELICAN ISLAND",
+    "flag": "Hong Kong",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "189.99",
+    "beam_m": "32.26",
+    "deadweight_t": "57905",
+    "gross_tonnage": "32424",
+    "year_of_build": "2014"
+  },
   "9698329": {
     "imo": "9698329",
     "name": "MARIA",
@@ -460,17 +471,6 @@
     "deadweight_t": "9137",
     "gross_tonnage": "6822",
     "year_of_build": "2022"
-  },
-  "9938004": {
-    "imo": "9938004",
-    "name": "CHEM BROADWAY",
-    "flag": "Liberia",
-    "ship_type": "Chemical/Oil Products Tanker",
-    "length_overall_m": "185.00",
-    "beam_m": "28.00",
-    "deadweight_t": "33450",
-    "gross_tonnage": "23402",
-    "year_of_build": "2025"
   },
   "9983865": {
     "imo": "9983865",
