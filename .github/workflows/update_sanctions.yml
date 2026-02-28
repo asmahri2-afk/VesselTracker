@@ -1,0 +1,151 @@
+name: Update Sanctions List
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # runs daily at 03:00 UTC
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch & parse sanctions (OFAC + UN + EU)
+        run: |
+          python3 - << 'PYEOF'
+          import urllib.request, xml.etree.ElementTree as ET, json, re, sys
+          from datetime import datetime, timezone
+
+          entries = {}  # imo -> {name, lists, program}
+
+          def add(imo, name, lst, program):
+              imo = re.sub(r'\D', '', str(imo))
+              if len(imo) != 7:
+                  return
+              if imo not in entries:
+                  entries[imo] = {"imo": imo, "name": name, "lists": [], "program": program}
+              if lst not in entries[imo]["lists"]:
+                  entries[imo]["lists"].append(lst)
+
+          # ── OFAC SDN ──────────────────────────────────────────────────────────
+          print("Fetching OFAC...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://www.treasury.gov/ofac/downloads/sdn.xml",
+                  headers={"User-Agent": "Mozilla/5.0"}
+              )
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  tree = ET.parse(r)
+              ns = {"s": "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML"}
+              root = tree.getroot()
+              # handle both namespaced and non-namespaced
+              entries_el = root.findall(".//sdnEntry") or root.findall(".//{*}sdnEntry")
+              for e in entries_el:
+                  stype = (e.findtext("sdnType") or e.findtext("{*}sdnType") or "").strip()
+                  if stype not in ("Vessel", "Entity"):
+                      continue
+                  name = (e.findtext("lastName") or e.findtext("{*}lastName") or "").strip()
+                  prog = ""
+                  for p in e.iter():
+                      if p.tag.endswith("program"):
+                          prog = p.text or ""
+                          break
+                  for id_el in e.iter():
+                      if not id_el.tag.endswith("id"):
+                          continue
+                      id_type = ""
+                      id_num = ""
+                      for child in id_el:
+                          tag = child.tag.split("}")[-1]
+                          if tag == "idType":
+                              id_type = (child.text or "").lower()
+                          elif tag == "idNumber":
+                              id_num = child.text or ""
+                      if "imo" in id_type or "vessel" in id_type:
+                          add(id_num, name, "OFAC", prog or "SDN")
+              print(f"  OFAC: {len(entries)} IMOs so far", flush=True)
+          except Exception as ex:
+              print(f"  OFAC failed: {ex}", flush=True)
+
+          # ── UN Security Council ───────────────────────────────────────────────
+          print("Fetching UN...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://scsanctions.un.org/resources/xml/en/consolidated.xml",
+                  headers={"User-Agent": "Mozilla/5.0"}
+              )
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  tree = ET.parse(r)
+              before = len(entries)
+              for e in tree.getroot().iter():
+                  if not e.tag.endswith(("INDIVIDUAL", "ENTITY")):
+                      continue
+                  name_el = e.find("FIRST_NAME") or e.find("NAME_ORIGINAL_SCRIPT")
+                  name = (name_el.text or "") if name_el is not None else ""
+                  un_type = ""
+                  ut = e.find("UN_LIST_TYPE")
+                  if ut is not None:
+                      un_type = ut.text or "UN"
+                  for info in e.iter():
+                      if not info.tag.endswith("OTHER_INFORMATION"):
+                          continue
+                      m = re.search(r'IMO[:\s#]*(\d{7})', info.text or "", re.I)
+                      if m:
+                          add(m.group(1), name, "UN Security Council", un_type or "UN")
+              print(f"  UN: {len(entries)-before} new IMOs", flush=True)
+          except Exception as ex:
+              print(f"  UN failed: {ex}", flush=True)
+
+          # ── EU Consolidated ───────────────────────────────────────────────────
+          print("Fetching EU...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw",
+                  headers={"User-Agent": "Mozilla/5.0"}
+              )
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  tree = ET.parse(r)
+              before = len(entries)
+              for e in tree.getroot().iter():
+                  if not e.tag.endswith("sanctionEntity"):
+                      continue
+                  name_el = e.find(".//nameAlias")
+                  name = name_el.get("wholeName", "") if name_el is not None else ""
+                  prog_el = e.find(".//regulation")
+                  prog = prog_el.get("programme", "EU") if prog_el is not None else "EU"
+                  for id_el in e.iter():
+                      if not id_el.tag.endswith("identification"):
+                          continue
+                      num = id_el.get("number", "")
+                      id_type = (id_el.get("identificationTypeCode") or "").lower()
+                      if "imo" in id_type:
+                          add(num, name, "EU", prog)
+              print(f"  EU: {len(entries)-before} new IMOs", flush=True)
+          except Exception as ex:
+              print(f"  EU failed: {ex}", flush=True)
+
+          # ── Write output ──────────────────────────────────────────────────────
+          import os
+          os.makedirs("data", exist_ok=True)
+          output = {
+              "updated": datetime.now(timezone.utc).isoformat(),
+              "total": len(entries),
+              "entries": sorted(entries.values(), key=lambda x: x["imo"])
+          }
+          with open("data/sanctioned_imos.json", "w") as f:
+              json.dump(output, f, separators=(",", ":"))
+          print(f"\nDone. {len(entries)} total sanctioned IMOs written to data/sanctioned_imos.json", flush=True)
+          PYEOF
+
+      - name: Commit updated sanctions data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/sanctioned_imos.json
+          git diff --cached --quiet && echo "No changes" || git commit -m "chore: update sanctioned_imos.json [$(date -u +%Y-%m-%d)]"
+          git push
