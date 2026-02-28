@@ -19,7 +19,7 @@ jobs:
         run: |
           python3 - << 'PYEOF'
           import urllib.request, csv, json, re, io, xml.etree.ElementTree as ET
-          from datetime import datetime, timezone, collections
+          from datetime import datetime, timezone
           from collections import Counter
 
           entries = {}
