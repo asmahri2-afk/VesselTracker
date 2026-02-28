@@ -219,6 +219,17 @@
     "gross_tonnage": "2658",
     "year_of_build": "2006"
   },
+  "9382164": {
+    "imo": "9382164",
+    "name": "KASSOS",
+    "flag": "Cyprus",
+    "ship_type": "Oil Products Tanker",
+    "length_overall_m": "102.50",
+    "beam_m": "17.80",
+    "deadweight_t": "6256",
+    "gross_tonnage": "4580",
+    "year_of_build": "2010"
+  },
   "9415650": {
     "imo": "9415650",
     "name": "AQUAMARINE PROGRESS",
