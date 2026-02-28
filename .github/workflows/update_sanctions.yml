@@ -15,15 +15,15 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch & parse sanctions (OFAC + UN + EU)
+      - name: Fetch & parse sanctions (all sources via OpenSanctions + OFAC direct)
         run: |
           python3 - << 'PYEOF'
-          import urllib.request, xml.etree.ElementTree as ET, json, re, sys
+          import urllib.request, csv, json, re, io, xml.etree.ElementTree as ET
           from datetime import datetime, timezone
 
-          entries = {}  # imo -> {name, lists, program}
+          entries = {}  # imo -> {imo, name, lists, program}
 
-          def add(imo, name, lst, program):
+          def add(imo, name, lst, program=""):
               imo = re.sub(r'\D', '', str(imo))
               if len(imo) != 7:
                   return
@@ -32,134 +32,123 @@ jobs:
               if lst not in entries[imo]["lists"]:
                   entries[imo]["lists"].append(lst)
 
-          # ── OFAC SDN ──────────────────────────────────────────────────────────
-          print("Fetching OFAC...", flush=True)
+          # SOURCE 1: OpenSanctions consolidated CSV
+          # Free for non-commercial use. Covers: OFAC, EU (all Russia packages),
+          # UK OFSI, UN 1718 (North Korea), Australia, Canada, Switzerland, Japan, Ukraine, 80+ more.
+          # https://www.opensanctions.org/datasets/sanctions/
+          print("Fetching OpenSanctions consolidated CSV...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://data.opensanctions.org/datasets/latest/sanctions/targets.simple.csv",
+                  headers={"User-Agent": "VesselTracker-GH-Action/1.0"}
+              )
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  raw = r.read().decode("utf-8")
+
+              reader = csv.DictReader(io.StringIO(raw))
+              os_count = 0
+              for row in reader:
+                  schema = row.get("schema", "")
+                  if schema not in ("Vessel", "Ship"):
+                      continue
+                  imo_val = ""
+                  for col in ("imoNumber", "registrationNumber", "id"):
+                      val = row.get(col, "")
+                      for part in val.split(";"):
+                          part = re.sub(r'\D', '', part.strip())
+                          if len(part) == 7:
+                              imo_val = part
+                              break
+                      if imo_val:
+                          break
+                  if not imo_val:
+                      for col, val in row.items():
+                          m = re.search(r'\b(\d{7})\b', val or "")
+                          if m:
+                              imo_val = m.group(1)
+                              break
+                  if not imo_val:
+                      continue
+                  name = row.get("name", "") or row.get("caption", "")
+                  datasets = row.get("datasets", "")
+                  mapping = {
+                      "us_ofac": "OFAC", "eu_fsf": "EU", "eu_": "EU",
+                      "gb_hmt": "UK", "un_": "UN", "au_dfat": "Australia",
+                      "ca_sema": "Canada", "ch_seco": "Switzerland",
+                      "jp_meti": "Japan", "ua_sfms": "Ukraine",
+                  }
+                  matched = set()
+                  list_names = []
+                  for ds in datasets.split(";"):
+                      ds = ds.strip()
+                      for prefix, label in mapping.items():
+                          if ds.startswith(prefix) and label not in matched:
+                              list_names.append(label)
+                              matched.add(label)
+                              break
+                  if not list_names:
+                      list_names = ["Sanctions"]
+                  for lst in list_names:
+                      add(imo_val, name, lst)
+                  os_count += 1
+
+              print(f"  OpenSanctions: {os_count} vessel rows -> {len(entries)} unique IMOs", flush=True)
+
+          except Exception as ex:
+              print(f"  OpenSanctions failed: {ex}", flush=True)
+
+          # SOURCE 2: OFAC SDN XML direct (authoritative fallback)
+          print("Fetching OFAC SDN XML (authoritative)...", flush=True)
+          before = len(entries)
           try:
               req = urllib.request.Request(
                   "https://www.treasury.gov/ofac/downloads/sdn.xml",
                   headers={"User-Agent": "Mozilla/5.0"}
               )
-              with urllib.request.urlopen(req, timeout=60) as r:
+              with urllib.request.urlopen(req, timeout=90) as r:
                   tree = ET.parse(r)
-              ns = {"s": "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML"}
               root = tree.getroot()
-              # handle both namespaced and non-namespaced
-              entries_el = root.findall(".//sdnEntry") or root.findall(".//{*}sdnEntry")
-              for e in entries_el:
-                  stype = (e.findtext("sdnType") or e.findtext("{*}sdnType") or "").strip()
+              sdn_entries = root.findall(".//{*}sdnEntry") or root.findall(".//sdnEntry")
+              for e in sdn_entries:
+                  stype = (e.findtext("{*}sdnType") or e.findtext("sdnType") or "").strip()
                   if stype not in ("Vessel", "Entity"):
                       continue
-                  name = (e.findtext("lastName") or e.findtext("{*}lastName") or "").strip()
-                  prog = ""
-                  for p in e.iter():
-                      if p.tag.endswith("program"):
-                          prog = p.text or ""
-                          break
+                  name = (e.findtext("{*}lastName") or e.findtext("lastName") or "").strip()
+                  prog = next((p.text for p in e.iter() if p.tag.endswith("program") and p.text), "SDN")
                   for id_el in e.iter():
                       if not id_el.tag.endswith("id"):
                           continue
-                      id_type = ""
-                      id_num = ""
+                      id_type, id_num = "", ""
                       for child in id_el:
                           tag = child.tag.split("}")[-1]
-                          if tag == "idType":
-                              id_type = (child.text or "").lower()
-                          elif tag == "idNumber":
-                              id_num = child.text or ""
+                          if tag == "idType":    id_type = (child.text or "").lower()
+                          elif tag == "idNumber": id_num  = child.text or ""
                       if "imo" in id_type or "vessel" in id_type:
-                          add(id_num, name, "OFAC", prog or "SDN")
-              print(f"  OFAC: {len(entries)} IMOs so far", flush=True)
+                          add(id_num, name, "OFAC", prog)
+              print(f"  OFAC direct: +{len(entries)-before} additional IMOs", flush=True)
           except Exception as ex:
-              print(f"  OFAC failed: {ex}", flush=True)
+              print(f"  OFAC direct failed: {ex}", flush=True)
 
-          # ── UN Security Council ───────────────────────────────────────────────
-          print("Fetching UN...", flush=True)
-          try:
-              req = urllib.request.Request(
-                  "https://scsanctions.un.org/resources/xml/en/consolidated.xml",
-                  headers={"User-Agent": "Mozilla/5.0"}
-              )
-              with urllib.request.urlopen(req, timeout=60) as r:
-                  raw = r.read()
-              # Debug: dump unique tags and first IMO context found
-              tree = ET.fromstring(raw)
-              # Scan entire XML text for IMO patterns — field name varies by version
-              full_text = raw.decode("utf-8", errors="replace")
-              before = len(entries)
-              # Strategy 1: regex over raw XML — most robust
-              # Capture the enclosing ENTITY/INDIVIDUAL name + IMO
-              # Walk all ENTITY/INDIVIDUAL elements and scan ALL child text
-              def iter_entries(root):
-                  for elem in root.iter():
-                      tag = elem.tag.split("}")[-1].upper()
-                      if tag in ("INDIVIDUAL", "ENTITY"):
-                          yield elem
-              for e in iter_entries(tree):
-                  # Collect name
-                  name = ""
-                  for tag in ("FIRST_NAME", "SECOND_NAME", "THIRD_NAME", "NAME_ORIGINAL_SCRIPT", "WHOLE_NAME"):
-                      el = e.find(f".//{tag}") or e.find(tag)
-                      if el is not None and el.text:
-                          name = el.text.strip()
-                          break
-                  # Get list type
-                  ut = e.find(".//UN_LIST_TYPE") or e.find("UN_LIST_TYPE")
-                  un_type = (ut.text or "UN") if ut is not None else "UN"
-                  # Scan ALL text content in this entry for IMO numbers
-                  entry_xml = ET.tostring(e, encoding="unicode")
-                  for m in re.finditer(r'IMO\s*[:\-#No\.]*\s*(\d{7})', entry_xml, re.I):
-                      add(m.group(1), name, "UN Security Council", un_type)
-              # Strategy 2: fallback — scan raw XML with surrounding context
-              if len(entries) - before == 0:
-                  print("  UN strategy 1 found nothing, trying raw scan...", flush=True)
-                  for m in re.finditer(r'IMO\s*[:\-#No\.]*\s*(\d{7})', full_text, re.I):
-                      add(m.group(1), "UN Vessel", "UN Security Council", "UN")
-              print(f"  UN: {len(entries)-before} new IMOs", flush=True)
-              # Debug: show unique tags seen
-              tags = set(el.tag.split("}")[-1] for el in tree.iter())
-              print(f"  UN XML tags: {sorted(tags)[:30]}", flush=True)
-          except Exception as ex:
-              print(f"  UN failed: {ex}", flush=True)
-
-          # ── EU Consolidated ───────────────────────────────────────────────────
-          print("Fetching EU...", flush=True)
-          try:
-              req = urllib.request.Request(
-                  "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw",
-                  headers={"User-Agent": "Mozilla/5.0"}
-              )
-              with urllib.request.urlopen(req, timeout=60) as r:
-                  tree = ET.parse(r)
-              before = len(entries)
-              for e in tree.getroot().iter():
-                  if not e.tag.endswith("sanctionEntity"):
-                      continue
-                  name_el = e.find(".//nameAlias")
-                  name = name_el.get("wholeName", "") if name_el is not None else ""
-                  prog_el = e.find(".//regulation")
-                  prog = prog_el.get("programme", "EU") if prog_el is not None else "EU"
-                  for id_el in e.iter():
-                      if not id_el.tag.endswith("identification"):
-                          continue
-                      num = id_el.get("number", "")
-                      id_type = (id_el.get("identificationTypeCode") or "").lower()
-                      if "imo" in id_type:
-                          add(num, name, "EU", prog)
-              print(f"  EU: {len(entries)-before} new IMOs", flush=True)
-          except Exception as ex:
-              print(f"  EU failed: {ex}", flush=True)
-
-          # ── Write output ──────────────────────────────────────────────────────
+          # Write output
           import os
           os.makedirs("data", exist_ok=True)
           output = {
               "updated": datetime.now(timezone.utc).isoformat(),
               "total": len(entries),
+              "sources": ["OpenSanctions (OFAC, EU all packages, UK, UN 1718, AU, CA, CH, JP, UA, 80+ lists)", "OFAC SDN direct"],
               "entries": sorted(entries.values(), key=lambda x: x["imo"])
           }
           with open("data/sanctioned_imos.json", "w") as f:
               json.dump(output, f, separators=(",", ":"))
-          print(f"\nDone. {len(entries)} total sanctioned IMOs written to data/sanctioned_imos.json", flush=True)
+
+          from collections import Counter
+          counter = Counter()
+          for e in entries.values():
+              for l in e["lists"]:
+                  counter[l] += 1
+          print(f"\n=== DONE: {len(entries)} total unique sanctioned vessel IMOs ===")
+          for lst, count in counter.most_common():
+              print(f"   {lst}: {count}")
           PYEOF
 
       - name: Commit updated sanctions data
