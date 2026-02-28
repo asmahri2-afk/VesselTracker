@@ -98,6 +98,17 @@
     "gross_tonnage": "6361",
     "year_of_build": "2001"
   },
+  "9255933": {
+    "imo": "9255933",
+    "name": "OCEAN KOI",
+    "flag": "Barbados",
+    "ship_type": "Crude Oil Tanker",
+    "length_overall_m": "229.00",
+    "beam_m": "32.20",
+    "deadweight_t": "72768",
+    "gross_tonnage": "41589",
+    "year_of_build": "2004"
+  },
   "9303091": {
     "imo": "9303091",
     "name": "NAFISA JAHAN",
