@@ -461,6 +461,17 @@
     "gross_tonnage": "6822",
     "year_of_build": "2022"
   },
+  "9938004": {
+    "imo": "9938004",
+    "name": "CHEM BROADWAY",
+    "flag": "Liberia",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "185.00",
+    "beam_m": "28.00",
+    "deadweight_t": "33450",
+    "gross_tonnage": "23402",
+    "year_of_build": "2025"
+  },
   "9983865": {
     "imo": "9983865",
     "name": "CAMEROUN EXPRESS",
