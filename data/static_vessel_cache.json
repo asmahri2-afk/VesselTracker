@@ -318,6 +318,17 @@
     "gross_tonnage": "1055",
     "year_of_build": "2007"
   },
+  "9487550": {
+    "imo": "9487550",
+    "name": "RUBATO",
+    "flag": "Antigua & Barbuda",
+    "ship_type": "Bulk Carrier",
+    "length_overall_m": "158.15",
+    "beam_m": "24.00",
+    "deadweight_t": "25159",
+    "gross_tonnage": "15243",
+    "year_of_build": "2010"
+  },
   "9501655": {
     "imo": "9501655",
     "name": "BBC BELEM",
