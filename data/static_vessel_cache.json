@@ -131,6 +131,17 @@
     "gross_tonnage": "30936",
     "year_of_build": "2006"
   },
+  "9323314": {
+    "imo": "9323314",
+    "name": "ADITYA",
+    "flag": "Cameroon",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "195.30",
+    "beam_m": "32.24",
+    "deadweight_t": "52622",
+    "gross_tonnage": "30681",
+    "year_of_build": "2006"
+  },
   "9342396": {
     "imo": "9342396",
     "name": "HELENA KOSAN",
