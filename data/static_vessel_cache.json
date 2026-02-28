@@ -164,6 +164,17 @@
     "gross_tonnage": "30681",
     "year_of_build": "2006"
   },
+  "9337987": {
+    "imo": "9337987",
+    "name": "AL GHARIYA",
+    "flag": "Bahamas",
+    "ship_type": "LNG Tanker",
+    "length_overall_m": "315.00",
+    "beam_m": "50.04",
+    "deadweight_t": "121730",
+    "gross_tonnage": "137535",
+    "year_of_build": "2008"
+  },
   "9342396": {
     "imo": "9342396",
     "name": "HELENA KOSAN",
