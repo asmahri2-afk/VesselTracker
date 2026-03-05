@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>VesselTracker v5.4 — Maritime Operations</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#020c1a" />
+    <meta name="description" content="Real-time maritime vessel tracking and monitoring system" />
+    
+    <!-- PWA MANIFEST -->
+    <link rel="manifest" href="data:application/manifest+json,{
+      %22name%22:%22VesselTracker%20-%20Maritime%20Operations%22,
+      %22short_name%22:%22VesselTracker%22,
+      %22description%22:%22Real-time maritime vessel tracking%22,
+      %22start_url%22:%22/%22,
+      %22display%22:%22standalone%22,
+      %22scope%22:%22/%22,
+      %22theme_color%22:%22%23020c1a%22,
+      %22background_color%22:%22%23020c1a%22,
+      %22icons%22:[{%22src%22:%22data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23020c1a' width='192' height='192'/><circle cx='96' cy='96' r='60' fill='%230ea5e9'/><path d='M96 36 L76 96 L116 96 Z' fill='%23fff'/></svg>%22,%22sizes%22:%22192x192%22,%22type%22:%22image/svg+xml%22}]
+    }" />
+    
+    <!-- APPLE SETUP -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23020c1a' width='180' height='180'/><circle cx='90' cy='90' r='54' fill='%230ea5e9'/><path d='M90 36 L70 90 L110 90 Z' fill='%23fff'/></svg>" />
+    
+    <!-- FAVICON -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23020c1a' width='192' height='192'/><circle cx='96' cy='96' r='60' fill='%230ea5e9'/><path d='M96 36 L76 96 L116 96 Z' fill='%23fff'/></svg>" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+    <style>
+        :root {
+            --bg-deep:#020c1a;--bg-base:#040e1e;--bg-card:#081626;--bg-elevated:#0c1d32;--bg-input:#091527;
+            --border:#12283f;--border-soft:#1a3a58;
+            --accent:#0ea5e9;--accent-dim:rgba(14,165,233,0.12);--accent-glow:rgba(14,165,233,0.35);
+            --success:#10b981;--success-dim:rgba(16,185,129,0.12);
+            --warning:#f59e0b;--warning-dim:rgba(245,158,11,0.12);
+            --danger:#ef4444;--danger-dim:rgba(239,68,68,0.12);
+            --purple:#8b5cf6;--teal:#14b8a6;
+            --urgent:#f43f5e;--urgent-dim:rgba(244,63,94,0.15);
+            --sanction:#ff4500;--sanction-dim:rgba(255,69,0,0.15);
+            --text-main:#c8d8e8;--text-soft:#4e6a84;--text-muted:#243648;
+            --mono:'DM Mono',monospace;--sans:'Syne',system-ui,sans-serif;
+            --radius:10px;--radius-lg:14px;--header-h:58px;--bottom-h:62px;
+        }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+        html{scroll-behavior:smooth;}
+        ::-webkit-scrollbar{width:4px;height:4px;}
+        ::-webkit-scrollbar-track{background:transparent;}
+        ::-webkit-scrollbar-thumb{background:var(--border-soft);border-radius:2px;}
+        body{font-family:var(--sans);background:var(--bg-deep);color:var(--text-main);min-height:100vh;line-height:1.5;overscroll-behavior-y:contain;}
+
+        /* HEADER */
+        .app-header{background:linear-gradient(180deg,#030f20 0%,var(--bg-base) 100%);border-bottom:1px solid var(--border);padding:0 max(16px,env(safe-area-inset-left));height:var(--header-h);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:300;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+        .header-brand{display:flex;align-items:center;gap:10px;}
+        .radar-wrap{position:relative;width:30px;height:30px;flex-shrink:0;}
+        .radar-core{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle,rgba(14,165,233,0.2) 0%,transparent 70%);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;position:relative;z-index:2;}
+        .radar-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);}
+        .radar-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.5);width:30px;height:30px;border-radius:50%;border:1px solid var(--accent);opacity:0;animation:radar-pulse 2.5s ease-out infinite;}
+        .radar-ring:nth-child(2){animation-delay:.85s;}.radar-ring:nth-child(3){animation-delay:1.7s;}
+        @keyframes radar-pulse{0%{transform:translate(-50%,-50%) scale(0.5);opacity:.8;}100%{transform:translate(-50%,-50%) scale(3.5);opacity:0;}}
+        .brand-text h1{font-size:.95rem;font-weight:800;letter-spacing:.06em;color:#fff;line-height:1;}
+        .brand-text span{font-family:var(--mono);font-size:.58rem;color:var(--accent);letter-spacing:.1em;}
+        .header-right{display:flex;align-items:center;gap:6px;}
+        .header-clock{font-family:var(--mono);font-size:.72rem;color:var(--text-soft);padding:4px 9px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);}
+        .icon-btn{background:var(--bg-elevated);border:1px solid var(--border-soft);color:var(--text-soft);padding:7px 9px;border-radius:var(--radius);cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;position:relative;transition:all .15s;min-width:36px;min-height:36px;}
+        .icon-btn:hover,.icon-btn:active{background:var(--border-soft);color:var(--text-main);}
+        .icon-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+        .badge{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;border-radius:9px;background:var(--danger);color:#fff;font-family:var(--mono);font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg-base);padding:0 3px;}
+        .badge.hidden{display:none;}
+
+        /* KPI BAR */
+        .kpi-bar{background:var(--bg-card);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+        .kpi-bar::-webkit-scrollbar{display:none;}
+        .kpi-item{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 14px;border-right:1px solid var(--border);min-width:80px;gap:1px;position:relative;flex-shrink:0;}
+        .kpi-item:last-child{border-right:none;flex:1;}
+        .kpi-label{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-soft);white-space:nowrap;}
+        .kpi-value{font-family:var(--mono);font-size:1.1rem;font-weight:500;line-height:1;color:var(--text-main);}
+        .kpi-value.green{color:var(--success);}.kpi-value.yellow{color:var(--warning);}.kpi-value.red{color:var(--danger);}.kpi-value.blue{color:var(--accent);}.kpi-value.orange{color:var(--sanction);}
+        .kpi-health-bar{position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--border);}
+        .kpi-health-fill{height:100%;transition:width .8s ease,background .3s;}
+
+        /* LAYOUT */
+        .layout{max-width:860px;margin:0 auto;padding:14px 14px calc(var(--bottom-h) + 20px + env(safe-area-inset-bottom));}
+
+        /* CARD */
+        .card{background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:12px;overflow:hidden;}
+        .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+        .card-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text-soft);}
+        .card-body{padding:14px 16px;}
+
+        /* INPUTS */
+        .input-row{display:flex;gap:8px;}
+        input[type="text"],select,textarea{background:var(--bg-input);border:1px solid var(--border-soft);border-radius:var(--radius);color:var(--text-main);font-family:var(--mono);font-size:.88rem;padding:10px 13px;outline:none;transition:border-color .2s,box-shadow .2s;width:100%;-webkit-appearance:none;appearance:none;}
+        input[type="text"]:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+        select{cursor:pointer;}textarea{font-size:.78rem;resize:vertical;min-height:54px;}
+        .input-flex{flex:1;min-width:0;}
+
+        /* BUTTONS */
+        button{font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.04em;border:none;border-radius:var(--radius);padding:10px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;white-space:nowrap;-webkit-appearance:none;}
+        button.primary{background:var(--accent);color:#fff;box-shadow:0 0 18px var(--accent-glow);}
+        button.primary:hover:not(:disabled){background:#38bdf8;transform:translateY(-1px);}
+        button.secondary{background:var(--bg-elevated);color:var(--text-main);border:1px solid var(--border-soft);}
+        button.secondary:hover:not(:disabled){background:var(--border-soft);}
+        button.danger{background:var(--danger-dim);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+        button.danger:hover:not(:disabled){background:rgba(239,68,68,.22);}
+        button.ghost{background:transparent;color:var(--text-soft);border:1px solid var(--border);}
+        button.ghost:hover:not(:disabled){background:var(--bg-elevated);color:var(--text-main);}
+        button.urgent-btn{background:var(--urgent-dim);color:var(--urgent);border:1px solid rgba(244,63,94,.3);}
+        button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;box-shadow:none!important;}
+
+        /* VIEW TOGGLE */
+        .view-toggle{display:flex;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+        .view-toggle button{border-radius:0;border:none;background:transparent;color:var(--text-soft);padding:6px 13px;font-size:.72rem;}
+        .view-toggle button.active{background:var(--accent-dim);color:var(--accent);}
+
+        /* FILTER BAR */
+        .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+        .filter-search{flex:1;min-width:160px;}
+        .filter-search input{font-size:.82rem;padding:8px 12px;}
+        .filter-chips{display:flex;gap:5px;flex-wrap:wrap;}
+        .chip{padding:5px 10px;border-radius:20px;font-size:.7rem;font-weight:700;border:1px solid var(--border-soft);background:var(--bg-elevated);color:var(--text-soft);cursor:pointer;transition:all .15s;white-space:nowrap;}
+        .chip:hover{border-color:var(--accent);color:var(--text-main);}
+        .chip.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+        .chip.urgent-chip.active{background:var(--urgent-dim);border-color:var(--urgent);color:var(--urgent);}
+        .chip.sanction-chip.active{background:var(--sanction-dim);border-color:var(--sanction);color:var(--sanction);}
+
+        /* TAGS */
+        .tag{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:.7rem;font-weight:600;white-space:nowrap;}
+        .tag.status-underway{background:var(--success-dim);color:var(--success);border:1px solid rgba(16,185,129,.2);}
+        .tag.status-stalled{background:var(--danger-dim);color:var(--danger);border:1px solid rgba(239,68,68,.2);}
+        .tag.status-at_port{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(14,165,233,.2);}
+        .tag.status-at_anchor{background:var(--warning-dim);color:var(--warning);border:1px solid rgba(245,158,11,.2);}
+        .tag.status-unknown{background:var(--bg-elevated);color:var(--text-soft);border:1px solid var(--border-soft);}
+        .tag.speed{background:var(--success-dim);color:var(--success);}
+        .tag.depth{background:rgba(20,184,166,.1);color:var(--teal);}
+        .tag.weather{background:rgba(139,92,246,.1);color:var(--purple);}
+        .tag.position{background:var(--accent-dim);color:var(--accent);font-family:var(--mono);font-size:.66rem;}
+        .tag.distance{background:var(--warning-dim);color:var(--warning);}
+        .tag.sanction-tag{background:var(--sanction-dim);color:var(--sanction);border:1px solid rgba(255,69,0,.3);animation:sanction-pulse 2s ease-in-out infinite;}
+        @keyframes sanction-pulse{0%,100%{opacity:1}50%{opacity:.6}}
+        .compat-ok{color:var(--success);}.compat-warn{color:var(--warning);}.compat-no{color:var(--danger);}.compat-unk{color:var(--text-soft);}
+
+        /* SANCTION BANNER */
+        .sanction-banner{padding:9px 16px;background:var(--sanction-dim);border-bottom:1px solid rgba(255,69,0,.25);display:flex;align-items:flex-start;gap:9px;font-size:.76rem;}
+        .sanction-banner-icon{font-size:.95rem;flex-shrink:0;margin-top:1px;}
+        .sanction-banner-title{font-weight:700;color:var(--sanction);margin-bottom:2px;}
+        .sanction-banner-detail{color:var(--text-main);font-size:.7rem;line-height:1.4;}
+
+        /* PRIORITY */
+        .priority-indicator{width:5px;flex-shrink:0;background:var(--urgent);animation:sanction-pulse 1.5s ease-in-out infinite;}
+
+        /* VESSEL CARDS */
+        .vessels{display:flex;flex-direction:column;gap:10px;}
+        .vessel-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:border-color .2s,box-shadow .2s;display:flex;flex-direction:column;}
+        .vessel-card.priority{border-color:rgba(244,63,94,.4);box-shadow:0 0 16px rgba(244,63,94,.1);}
+        .vessel-card.sanctioned{border-color:rgba(255,69,0,.5);box-shadow:0 0 20px rgba(255,69,0,.15);}
+        .vessel-card:not(.sanctioned):not(.priority){border-left:3px solid transparent;}
+        .vessel-card.underway{border-left-color:var(--success);}
+        .vessel-card.at_port{border-left-color:var(--accent);}
+        .vessel-card.at_anchor{border-left-color:var(--warning);}
+        .vessel-card.stalled{border-left-color:var(--danger);}
+        .vessel-card-inner{display:flex;flex:1;}
+        .vessel-main{padding:13px 15px;cursor:pointer;flex:1;}
+        .vessel-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;}
+        .vessel-name-block{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+        .vessel-name{font-size:.93rem;font-weight:700;color:#fff;}
+        .vessel-imo{font-family:var(--mono);font-size:.66rem;color:var(--text-soft);margin-top:2px;margin-left:1px;}
+        .vessel-loa{font-family:var(--mono);font-size:.66rem;color:var(--text-soft);background:var(--bg-elevated);padding:2px 6px;border-radius:4px;border:1px solid var(--border);}
+        .flag-icon{width:24px;height:17px;object-fit:cover;border:1px solid var(--border-soft);border-radius:2px;flex-shrink:0;}
+        .flag-placeholder{width:24px;height:17px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;}
+        .vessel-meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:8px 0;}
+        .meta-row{display:flex;align-items:baseline;gap:5px;font-size:.75rem;}
+        .meta-label{color:var(--text-soft);font-size:.67rem;min-width:55px;flex-shrink:0;}
+        .meta-val{color:var(--text-main);font-family:var(--mono);font-size:.75rem;}
+        .meta-val.age-recent{color:var(--success);}.meta-val.age-moderate{color:var(--warning);}.meta-val.age-stale{color:var(--danger);}
+        .meta-val.status-critical{color:var(--danger);animation:blink 1s step-start infinite;}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+        .tag-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;}
+        .hint-text{font-size:.63rem;color:var(--text-muted);margin-top:7px;}
+        .eta-countdown{font-family:var(--mono);font-size:.7rem;color:var(--accent);font-weight:500;}
+        .eta-countdown.arrived{color:var(--success);}.eta-countdown.overdue{color:var(--danger);}
+
+        /* EXPANDED */
+        .vessel-expanded{max-height:0;overflow:hidden;padding:0 16px;background:var(--bg-elevated);border-top:1px solid transparent;transition:max-height .4s ease,padding .3s,border-color .3s;}
+        .vessel-expanded.open{max-height:1400px;padding:16px;border-top-color:var(--border);}
+        .expanded-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:12px;}
+        .exp-item{display:flex;flex-direction:column;gap:2px;}
+        .exp-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--text-soft);}
+        .exp-val{font-family:var(--mono);font-size:.8rem;color:var(--text-main);font-weight:500;}
+        .section-divider{height:1px;background:var(--border);margin:12px 0;}
+        .section-mini-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-soft);margin-bottom:8px;font-weight:700;}
+        .compat-grid{display:flex;gap:7px;flex-wrap:wrap;}
+        .compat-port{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:7px 10px;display:flex;align-items:center;gap:7px;font-size:.74rem;}
+        .compat-port-name{color:var(--text-main);font-weight:700;}
+        .compat-port-depth{font-family:var(--mono);font-size:.65rem;color:var(--text-soft);}
+        .notes-saved{font-size:.62rem;color:var(--success);margin-left:7px;opacity:0;transition:opacity .3s;}
+        .notes-saved.show{opacity:1;}
+
+        /* FOOTER */
+        .vessel-footer{padding:9px 15px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg-base);flex-wrap:wrap;}
+        .vessel-footer-meta{font-family:var(--mono);font-size:.63rem;color:var(--text-soft);}
+        .vessel-footer-actions{display:flex;gap:5px;}
+
+        /* MAP */
+        #mapContainer{height:460px;border-radius:var(--radius);overflow:hidden;background:#0a1520;}
+        .leaflet-popup-content-wrapper{background:var(--bg-card)!important;border:1px solid var(--border-soft)!important;border-radius:var(--radius)!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important;color:var(--text-main)!important;font-family:var(--sans)!important;}
+        .leaflet-popup-tip{background:var(--bg-card)!important;}
+        .leaflet-popup-close-button{color:var(--text-soft)!important;}
+
+        /* ALERT PANEL */
+        .alert-panel{position:fixed;top:0;right:0;width:min(360px,100vw);height:100vh;background:var(--bg-card);border-left:1px solid var(--border);z-index:1500;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.6);padding-bottom:env(safe-area-inset-bottom);}
+        .alert-panel.open{transform:translateX(0);}
+        .alert-panel-header{padding:15px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+        .alert-panel-title{font-weight:700;font-size:.86rem;color:#fff;}
+        .alert-list{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:7px;-webkit-overflow-scrolling:touch;}
+        .alert-item{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;font-size:.78rem;}
+        .alert-item.unread{border-left:3px solid var(--accent);}
+        .alert-item.type-stalled{border-left-color:var(--danger);}
+        .alert-item.type-arrived{border-left-color:var(--success);}
+        .alert-item.type-stale{border-left-color:var(--warning);}
+        .alert-item.type-approaching{border-left-color:var(--purple);}
+        .alert-item.type-added{border-left-color:var(--accent);}
+        .alert-item.type-sanctioned{border-left-color:var(--sanction);background:var(--sanction-dim);}
+        .alert-msg{color:var(--text-main);line-height:1.4;}
+        .alert-time{font-family:var(--mono);font-size:.62rem;color:var(--text-soft);margin-top:3px;}
+        .alert-empty{text-align:center;padding:40px 20px;color:var(--text-soft);font-size:.82rem;}
+        .alert-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1499;display:none;}
+        .alert-overlay.show{display:block;}
+
+        /* SANCTIONS STATUS */
+        .sanctions-loading{display:flex;align-items:center;gap:5px;font-size:.68rem;color:var(--text-soft);font-family:var(--mono);}
+        .sanctions-dot{width:6px;height:6px;border-radius:50%;background:var(--warning);animation:blink 1s step-start infinite;}
+
+        /* LOADING / MODAL */
+        .loading-overlay{position:fixed;inset:0;background:rgba(2,12,26,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2000;backdrop-filter:blur(6px);}
+        .spinner{width:34px;height:34px;border:2px solid var(--border-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .loading-text{font-size:.8rem;color:var(--text-soft);font-family:var(--mono);}
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:2000;backdrop-filter:blur(4px);padding:20px;}
+        .modal{background:var(--bg-card);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:24px;max-width:400px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.7);}
+        .modal-title{font-size:1rem;font-weight:700;color:#fff;margin-bottom:8px;}
+        .modal-msg{font-size:.82rem;color:var(--text-soft);line-height:1.5;}
+        .modal-actions{display:flex;gap:8px;margin-top:20px;justify-content:flex-end;}
+
+        /* STATUS */
+        .status-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap;}
+        .status-msg{font-size:.75rem;font-family:var(--mono);color:var(--text-soft);}
+        .status-msg.success{color:var(--success);}.status-msg.warning{color:var(--warning);}.status-msg.error{color:var(--danger);}
+        .health-pill{padding:3px 9px;border-radius:20px;font-size:.67rem;font-weight:700;border:1px solid;font-family:var(--mono);}
+
+        /* SECTION HEADER */
+        .section-header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+        .section-title{font-weight:700;font-size:.88rem;color:var(--text-main);}
+        .section-count{font-family:var(--mono);font-size:.7rem;color:var(--text-soft);margin-top:1px;}
+        .section-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+
+        /* EMPTY */
+        .empty-state{text-align:center;padding:50px 20px;color:var(--text-soft);}
+        .empty-state .icon{font-size:2.2rem;margin-bottom:12px;opacity:.35;}
+        .empty-state p{font-size:.86rem;margin-bottom:5px;}
+        .empty-state small{font-family:var(--mono);font-size:.7rem;color:var(--accent);}
+
+        /* BOTTOM NAV */
+        .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--bottom-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg-card);border-top:1px solid var(--border);display:none;align-items:center;justify-content:space-around;z-index:200;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+        .nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;cursor:pointer;color:var(--text-soft);transition:color .15s;border-radius:var(--radius);flex:1;}
+        .nav-item.active{color:var(--accent);}
+        .nav-item span:first-child{font-size:1.15rem;}
+        .nav-item span:last-child{font-size:.56rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+
+        /* PTR */
+        .ptr-indicator{text-align:center;padding:10px;font-size:.74rem;color:var(--text-soft);font-family:var(--mono);height:0;overflow:hidden;transition:height .2s;}
+        .ptr-indicator.show{height:38px;}
+
+        /* NAME PREVIEW */
+        .name-preview{margin-top:8px;font-size:.8rem;min-height:22px;}
+
+        /* UTILS */
+        .hidden{display:none!important;}
+        .flex{display:flex;}.items-center{align-items:center;}.gap-2{gap:8px;}
+
+        /* RESPONSIVE */
+        @media(max-width:640px){
+            .bottom-nav{display:flex;}
+            .header-clock{display:none;}
+            .desktop-only{display:none!important;}
+            .vessel-meta{grid-template-columns:1fr;}
+            #mapContainer{height:360px;}
+            .filter-chips{gap:4px;}
+            .chip{padding:4px 8px;font-size:.66rem;}
+            .kpi-item{min-width:70px;padding:6px 9px;}
+            .kpi-value{font-size:1rem;}
+            .layout{padding:10px 10px calc(var(--bottom-h) + 14px + env(safe-area-inset-bottom));}
+        }
+        @media(min-width:641px){.mobile-only{display:none!important;}}
+        @media(max-width:400px){.input-row{flex-direction:column;}.vessel-footer-actions{width:100%;justify-content:flex-end;}}
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <div id="loadingText" class="loading-text">Loading...</div>
+</div>
+
+<div id="confirmModal" class="modal-overlay hidden">
+    <div class="modal">
+        <div id="confirmTitle" class="modal-title">Confirm</div>
+        <div id="confirmMsg" class="modal-msg"></div>
+        <div class="modal-actions">
+            <button id="confirmCancel" class="ghost">Cancel</button>
+            <button id="confirmOk" class="danger">Remove</button>
+        </div>
+    </div>
+</div>
+
+<div id="alertOverlay" class="alert-overlay"></div>
+<div id="alertPanel" class="alert-panel">
+    <div class="alert-panel-header">
+        <span class="alert-panel-title">🔔 Alert Center</span>
+        <div class="flex gap-2">
+            <button class="ghost" style="padding:4px 9px;font-size:.7rem;" onclick="markAllAlertsRead()">Read All</button>
+            <button class="ghost" style="padding:4px 9px;font-size:.7rem;" onclick="clearAlerts()">Clear</button>
+            <button class="ghost" style="padding:4px 8px;" onclick="closeAlertPanel()">✕</button>
+        </div>
+    </div>
+    <div id="alertList" class="alert-list"><div class="alert-empty">📡 Monitoring fleet activity...</div></div>
+</div>
+
+<header class="app-header">
+    <div class="header-brand">
+        <div class="radar-wrap">
+            <div class="radar-core"><div class="radar-dot"></div></div>
+            <div class="radar-ring"></div><div class="radar-ring"></div><div class="radar-ring"></div>
+        </div>
+        <div class="brand-text"><h1>VESSELTRACKER</h1><span>Maritime Operations · v5.4</span></div>
+    </div>
+    <div class="header-right">
+        <div id="headerClock" class="header-clock desktop-only">00:00:00 UTC</div>
+        <div id="sanctionsStatus" class="sanctions-loading desktop-only"><div class="sanctions-dot"></div><span>Loading sanctions...</span></div>
+        <button class="ghost desktop-only" style="padding:6px 11px;font-size:.73rem;" onclick="exportCSV()">⬇ Export</button>
+        <button class="icon-btn" id="bellBtn" onclick="toggleAlertPanel()">🔔<span id="alertBadge" class="badge hidden">0</span></button>
+    </div>
+</header>
+
+<div class="kpi-bar">
+    <div class="kpi-item"><div class="kpi-label">Fleet</div><div class="kpi-value blue" id="kpiTotal">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">Underway</div><div class="kpi-value green" id="kpiUnderway">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">At Port</div><div class="kpi-value blue" id="kpiAtPort">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">Anchor</div><div class="kpi-value yellow" id="kpiAtAnchor">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">Stalled</div><div class="kpi-value red" id="kpiStalled">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">⚠ Sanctioned</div><div class="kpi-value orange" id="kpiSanctioned">–</div></div>
+    <div class="kpi-item"><div class="kpi-label">Fleet Health</div><div class="kpi-value" id="kpiHealth">–</div><div class="kpi-health-bar"><div id="kpiHealthFill" class="kpi-health-fill" style="width:0%"></div></div></div>
+</div>
+
+<div id="ptrIndicator" class="ptr-indicator">↓ Release to refresh</div>
+
+<div class="layout">
+    <div class="card" id="addCard">
+        <div class="card-header">
+            <span class="card-title">Add Vessel</span>
+            <span id="apiStatus" class="health-pill" style="border-color:var(--border-soft);color:var(--text-soft);">API: Checking...</span>
+        </div>
+        <div class="card-body">
+            <div class="input-row">
+                <input id="imoInput" class="input-flex" type="text" placeholder="7-digit IMO number..." autocomplete="off" maxlength="7" inputmode="numeric">
+                <button id="addButton" class="primary" onclick="addIMO()" disabled>＋ Add</button>
+            </div>
+            <div id="namePreview" class="name-preview"></div>
+            <div class="status-bar">
+                <span id="statusMsg" class="status-msg">Ready...</span>
+                <span id="dataStats" class="status-msg" style="font-size:.65rem;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body" style="padding-bottom:12px;">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">Tracked Fleet</div>
+                    <div id="vesselCount" class="section-count">Loading...</div>
+                </div>
+                <div class="section-actions">
+                    <div class="view-toggle desktop-only">
+                        <button id="viewListBtn" class="active" onclick="toggleView('list')">≡ List</button>
+                        <button id="viewMapBtn" onclick="toggleView('map')">⊕ Map</button>
+                    </div>
+                    <select id="sortSelect" onchange="setSort(this.value)" style="width:auto;font-size:.73rem;padding:6px 10px;" class="desktop-only">
+                        <option value="PRIORITY">Priority First</option>
+                        <option value="AGE_DESC">Oldest Signal</option>
+                        <option value="AGE_ASC">Newest Signal</option>
+                        <option value="STATUS_ASC">By Status</option>
+                        <option value="NAME_ASC">Name A–Z</option>
+                    </select>
+                    <button id="refreshButton" class="secondary" onclick="loadData()" style="padding:6px 10px;font-size:.73rem;">🔄</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <div class="filter-search"><input type="text" id="searchInput" placeholder="Search name or IMO..." oninput="applyFilter()"></div>
+                <div class="filter-chips">
+                    <span class="chip active" onclick="setFilter('ALL',this)">All</span>
+                    <span class="chip" onclick="setFilter('UNDERWAY',this)">⚡ Underway</span>
+                    <span class="chip" onclick="setFilter('AT PORT',this)">🏭 Port</span>
+                    <span class="chip" onclick="setFilter('AT ANCHOR',this)">⚓ Anchor</span>
+                    <span class="chip" onclick="setFilter('STALLED',this)">🔴 Stalled</span>
+                    <span class="chip urgent-chip" onclick="setFilter('PRIORITY',this)">🚩 Priority</span>
+                    <span class="chip sanction-chip" onclick="setFilter('SANCTIONED',this)">🚨 Sanctioned</span>
+                </div>
+            </div>
+            <div id="listView">
+                <div id="vesselsContainer" class="vessels"><div class="empty-state"><div class="icon">🚢</div><p>Loading vessel data...</p></div></div>
+            </div>
+            <div id="mapView" class="hidden"><div id="mapContainer"></div></div>
+            <div class="status-bar">
+                <span id="lastUpdated" class="status-msg">Last updated: —</span>
+                <span id="systemHealth" class="health-pill" style="border-color:var(--border-soft);color:var(--text-soft);">Checking...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<nav class="bottom-nav mobile-only">
+    <div class="nav-item active" id="navFleet" onclick="mobileNav('fleet')"><span>🚢</span><span>Fleet</span></div>
+    <div class="nav-item" id="navMap" onclick="mobileNav('map')"><span>🗺</span><span>Map</span></div>
+    <div class="nav-item" id="navAdd" onclick="mobileNav('add')"><span>＋</span><span>Add</span></div>
+    <div class="nav-item" id="navAlerts" onclick="toggleAlertPanel()"><span style="position:relative;">🔔<span id="navBadge" class="badge hidden" style="top:-8px;right:-8px;font-size:.55rem;width:15px;height:15px;"></span></span><span>Alerts</span></div>
+    <div class="nav-item" id="navExport" onclick="exportCSV()"><span>⬇</span><span>Export</span></div>
+</nav>
+
+<script>
+const CONFIG = {
+    USERNAME:"asmahri2-afk", REPO:"VesselTracker", BRANCH:"main",
+    RENDER_API:"https://vessel-api-s85s.onrender.com",
+    WORKER_URL:"https://vesseltracker.asmahri1.workers.dev",
+    TRACKED_PATH:"data/tracked_imos.json", VESSELS_PATH:"data/vessels_data.json",
+    STATIC_CACHE_PATH:"data/static_vessel_cache.json", PORTS_PATH:"data/ports.json",
+    STALE_THRESHOLD_MS:6*3600000, CRITICAL_THRESHOLD_MS:24*3600000,
+    ARRIVED_THRESHOLD_NM:30.0, REFRESH_INTERVAL:5*60000,
+    SANCTIONS_URL:"https://raw.githubusercontent.com/asmahri2-afk/VesselTracker/main/data/sanctioned_imos.json",
+};
+// ✅ FIX: RAW_BASE was missing — all GitHub raw fetches were building URLs as "undefineddata/..."
+CONFIG.RAW_BASE = `https://raw.githubusercontent.com/${CONFIG.USERNAME}/${CONFIG.REPO}/${CONFIG.BRANCH}/`;
+
+let S = {
+    isApiBusy:false, vesselsDataMap:new Map(), staticCache:new Map(), portsData:{},
+    currentSortKey:localStorage.getItem("vt_sort")||"PRIORITY",
+    currentFilter:"ALL", searchQuery:"",
+    trackedImosCache:[], debounceTimer:null, refreshInterval:null, etaInterval:null,
+    vesselToRemove:null, currentView:"list", previousVesselStates:new Map(),
+    alerts:JSON.parse(localStorage.getItem("vt_alerts")||"[]"),
+    priorities:JSON.parse(localStorage.getItem("vt_priorities")||"[]"),
+    sanctionedImos:new Set(), sanctionDetails:new Map(), sanctionsLoaded:false,
+    weatherCache:new Map(), mapInstance:null, mapMarkers:[], mapInitialized:false, noteTimers:{},
+};
+
+const el = {
+    statusMsg:document.getElementById("statusMsg"), namePreview:document.getElementById("namePreview"),
+    vesselsContainer:document.getElementById("vesselsContainer"), imoInput:document.getElementById("imoInput"),
+    addButton:document.getElementById("addButton"), sortSelect:document.getElementById("sortSelect"),
+    loadingOverlay:document.getElementById("loadingOverlay"), loadingText:document.getElementById("loadingText"),
+    confirmModal:document.getElementById("confirmModal"), confirmTitle:document.getElementById("confirmTitle"),
+    confirmMsg:document.getElementById("confirmMsg"), confirmCancel:document.getElementById("confirmCancel"),
+    confirmOk:document.getElementById("confirmOk"), systemHealth:document.getElementById("systemHealth"),
+    dataStats:document.getElementById("dataStats"), vesselCount:document.getElementById("vesselCount"),
+    refreshButton:document.getElementById("refreshButton"), lastUpdated:document.getElementById("lastUpdated"),
+    apiStatus:document.getElementById("apiStatus"), alertPanel:document.getElementById("alertPanel"),
+    alertOverlay:document.getElementById("alertOverlay"), alertList:document.getElementById("alertList"),
+    alertBadge:document.getElementById("alertBadge"), navBadge:document.getElementById("navBadge"),
+    listView:document.getElementById("listView"), mapView:document.getElementById("mapView"),
+    viewListBtn:document.getElementById("viewListBtn"), viewMapBtn:document.getElementById("viewMapBtn"),
+    kpiTotal:document.getElementById("kpiTotal"), kpiUnderway:document.getElementById("kpiUnderway"),
+    kpiAtPort:document.getElementById("kpiAtPort"), kpiAtAnchor:document.getElementById("kpiAtAnchor"),
+    kpiStalled:document.getElementById("kpiStalled"), kpiSanctioned:document.getElementById("kpiSanctioned"),
+    kpiHealth:document.getElementById("kpiHealth"), kpiHealthFill:document.getElementById("kpiHealthFill"),
+    headerClock:document.getElementById("headerClock"), sanctionsStatus:document.getElementById("sanctionsStatus"),
+    addCard:document.getElementById("addCard"),
+};
+
+// CLOCK
+function tickClock(){const n=new Date(),p=v=>String(v).padStart(2,"0");if(el.headerClock)el.headerClock.textContent=`${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())} UTC`;}
+setInterval(tickClock,1000);tickClock();
+
+// ETA COUNTDOWN
+function formatEtaCountdown(utcString){
+    if(!utcString)return null;
+    try{
+        const eta=new Date(utcString).getTime();if(isNaN(eta))return null;
+        const diff=eta-Date.now(),abs=Math.abs(diff);
+        const h=Math.floor(abs/3600000),m=Math.floor((abs%3600000)/60000),s=Math.floor((abs%60000)/1000);
+        const p=v=>String(v).padStart(2,"0");
+        if(abs<60000)return{text:"Arriving Now",cls:"arrived"};
+        if(diff>0)return{text:`ETA ${h>0?h+"h ":""}${p(m)}m ${p(s)}s`,cls:""};
+        return{text:`${h>0?h+"h ":""}${p(m)}m overdue`,cls:"overdue"};
+    }catch{return null;}
+}
+function startEtaCountdowns(){
+    if(S.etaInterval)clearInterval(S.etaInterval);
+    S.etaInterval=setInterval(()=>{
+        document.querySelectorAll("[data-eta]").forEach(e=>{
+            const r=formatEtaCountdown(e.getAttribute("data-eta"));
+            if(r){e.textContent=r.text;e.className=`eta-countdown ${r.cls}`;}
+        });
+    },1000);
+}
+
+// SANCTIONS
+async function loadSanctionsLists(){
+    el.sanctionsStatus.innerHTML='<div class="sanctions-dot"></div><span>Loading sanctions...</span>';
+    const dmap=new Map();
+    function addD(imo,list,name,reason){if(!dmap.has(imo))dmap.set(imo,[]);dmap.get(imo).push({list,name,reason});}
+    try{
+        const res=await fetchWithTimeout(CONFIG.SANCTIONS_URL,{cache:"no-cache"},10000);
+        if(!res.ok)throw new Error(`HTTP ${res.status}`);
+        const data=await res.json();
+        (data.entries||[]).forEach(e=>{
+            const imo=String(e.imo).replace(/\D/g,"");
+            if(imo.length!==7)return;
+            (e.lists||["OFAC"]).forEach(list=>addD(imo,list,e.name||"",e.program||list));
+        });
+        S.sanctionedImos=new Set(dmap.keys());
+        S.sanctionDetails=dmap;
+        S.sanctionsLoaded=true;
+        const total=S.sanctionedImos.size;
+        const updated=data.updated?" · "+new Date(data.updated).toLocaleDateString():"";
+        el.sanctionsStatus.innerHTML=`<span style="color:var(--success);font-size:.68rem;font-family:var(--mono);">✓ ${total.toLocaleString()} sanctioned IMOs${updated}</span>`;
+        console.log("Sanctions loaded:",total,"IMOs");
+    }catch(e){
+        console.warn("Sanctions unavailable:",e.message);
+        S.sanctionsLoaded=true;
+        el.sanctionsStatus.innerHTML='<span style="color:var(--warning);font-size:.68rem;font-family:var(--mono);">⚠ Sanctions unavailable</span>';
+    }
+    checkFleetSanctions();
+}
+function checkFleetSanctions(){
+    if(!S.sanctionsLoaded)return;
+    let found=false;
+    for(const imo of S.trackedImosCache){
+        if(S.sanctionedImos.has(imo)){
+            found=true;
+            const d=S.sanctionDetails.get(imo)||[];
+            const lists=[...new Set(d.map(x=>x.list))].join(", ");
+            const v=S.vesselsDataMap.get(imo);
+            pushAlert("sanctioned",imo,v?.name||imo,`🚨 SANCTIONED: ${v?.name||"IMO "+imo} on ${lists||"sanctions list"}`);
+        }
+    }
+    if(found){renderVessels(S.trackedImosCache);updateFleetKPI(S.trackedImosCache);}
+}
+
+// ALERTS
+function pushAlert(type,imo,vessel,msg){
+    const icons={stalled:"🔴",arrived:"⚓",stale:"📡",approaching:"🎯",added:"➕",removed:"➖",sanctioned:"🚨",priority:"🚩"};
+    if(type==="sanctioned"&&S.alerts.some(a=>a.type==="sanctioned"&&a.imo===imo))return;
+    S.alerts.unshift({id:Date.now()+Math.random(),type,imo,vessel,msg,icon:icons[type]||"•",time:new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}),read:false});
+    if(S.alerts.length>60)S.alerts.pop();
+    localStorage.setItem("vt_alerts",JSON.stringify(S.alerts));
+    renderAlerts();updateAlertBadge();
+}
+function renderAlerts(){
+    if(!S.alerts.length){el.alertList.innerHTML='<div class="alert-empty">📡 Monitoring fleet activity...</div>';return;}
+    el.alertList.innerHTML=S.alerts.map(a=>`<div class="alert-item ${a.read?"":"unread"} type-${a.type}"><div><span style="margin-right:4px;">${a.icon}</span><span class="alert-msg">${a.msg}</span></div><div class="alert-time">${a.time} · IMO ${a.imo}</div></div>`).join("");
+}
+function markAllAlertsRead(){S.alerts.forEach(a=>a.read=true);localStorage.setItem("vt_alerts",JSON.stringify(S.alerts));renderAlerts();updateAlertBadge();}
+function clearAlerts(){S.alerts=[];localStorage.setItem("vt_alerts",JSON.stringify(S.alerts));renderAlerts();updateAlertBadge();}
+function updateAlertBadge(){const n=S.alerts.filter(a=>!a.read).length;[el.alertBadge,el.navBadge].forEach(b=>{if(!b)return;b.textContent=n;b.classList.toggle("hidden",n===0)});}
+function toggleAlertPanel(){const open=el.alertPanel.classList.toggle("open");el.alertOverlay.classList.toggle("show",open);if(open)markAllAlertsRead();}
+function closeAlertPanel(){el.alertPanel.classList.remove("open");el.alertOverlay.classList.remove("show");}
+el.alertOverlay.addEventListener("click",closeAlertPanel);
+
+// PRIORITY
+function isPriority(imo){return S.priorities.includes(imo);}
+function togglePriority(imo){
+    if(isPriority(imo))S.priorities=S.priorities.filter(x=>x!==imo);
+    else{S.priorities.push(imo);pushAlert("priority",imo,imo,`IMO ${imo} flagged as Priority`);}
+    localStorage.setItem("vt_priorities",JSON.stringify(S.priorities));
+    renderVessels(S.trackedImosCache);
+}
+
+// NOTES
+function getNotes(imo){return localStorage.getItem(`vt_notes_${imo}`)||"";}
+function saveNotes(imo,text){
+    localStorage.setItem(`vt_notes_${imo}`,text);
+    const s=document.getElementById(`notes-saved-${imo}`);
+    if(s){s.classList.add("show");setTimeout(()=>s.classList.remove("show"),1800);}
+}
+function onNoteInput(imo,ta){clearTimeout(S.noteTimers[imo]);S.noteTimers[imo]=setTimeout(()=>saveNotes(imo,ta.value),600);}
+
+// WEATHER
+async function fetchAndRenderWeather(imo,lat,lon){
+    if(!lat||!lon)return;
+    const c=document.getElementById(`weather-${imo}`);if(!c)return;
+    const cached=S.weatherCache.get(imo);
+    if(cached&&Date.now()-cached.ts<30*60000){
+        const p=[];if(cached.wave!=null)p.push(`<span class="tag weather">🌊 ${Number(cached.wave).toFixed(1)}m</span>`);if(cached.wind!=null)p.push(`<span class="tag weather">💨 ${Number(cached.wind).toFixed(0)}kn</span>`);if(p.length)c.innerHTML=p.join("");return;
+    }
+    try{
+        const[mr,wr]=await Promise.all([fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&current=wave_height`),fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m&wind_speed_unit=kn`)]);
+        const md=await mr.json(),wd=await wr.json();
+        const result={wave:md.current?.wave_height,wind:wd.current?.wind_speed_10m,ts:Date.now()};
+        S.weatherCache.set(imo,result);
+        if(!document.getElementById(`weather-${imo}`))return;
+        const p=[];if(result.wave!=null)p.push(`<span class="tag weather">🌊 ${Number(result.wave).toFixed(1)}m</span>`);if(result.wind!=null)p.push(`<span class="tag weather">💨 ${Number(result.wind).toFixed(0)}kn</span>`);
+        if(p.length)document.getElementById(`weather-${imo}`).innerHTML=p.join("");
+    }catch{}
+}
+
+// UTILS
+function showLoading(msg="Loading..."){el.loadingText.textContent=msg;el.loadingOverlay.classList.remove("hidden");}
+function hideLoading(){el.loadingOverlay.classList.add("hidden");}
+function updateStatus(msg,type="info"){el.statusMsg.textContent=msg;el.statusMsg.className=`status-msg ${type==="info"?"":type}`;if(type==="success")setTimeout(()=>{if(el.statusMsg.textContent===msg){el.statusMsg.textContent="Ready";el.statusMsg.className="status-msg";}},5000);}
+function formatNumber(num){if(!num&&num!==0)return"N/A";const n=Number(num);if(isNaN(n))return"N/A";if(n>=1000)return(n/1000).toFixed(1)+"k";if(n>=100)return n.toFixed(0);if(n>=10)return n.toFixed(1);return n.toFixed(2);}
+
+// API
+async function fetchWithTimeout(url,options={},timeout=8000){const ctrl=new AbortController();const id=setTimeout(()=>ctrl.abort(),timeout);try{const r=await fetch(url,{...options,signal:ctrl.signal});clearTimeout(id);return r;}catch(e){clearTimeout(id);throw e;}}
+async function checkApiStatus(){
+    try{await fetchWithTimeout(`${CONFIG.RENDER_API}/ping`,{method:"GET"},5000);el.apiStatus.textContent="API: Online";el.apiStatus.style.cssText="border-color:rgba(16,185,129,.4);color:var(--success);";}
+    catch{try{await fetchWithTimeout(`${CONFIG.RAW_BASE}${CONFIG.TRACKED_PATH}`,{method:"HEAD"},5000);el.apiStatus.textContent="API: Limited";el.apiStatus.style.cssText="border-color:rgba(245,158,11,.4);color:var(--warning)";}
+    catch{el.apiStatus.textContent="API: Offline";el.apiStatus.style.cssText="border-color:rgba(239,68,68,.4);color:var(--danger)";}}
+}
+
+// GITHUB
+async function fetchGitHubData(path,fallback=null){
+    const url=`${CONFIG.RAW_BASE}${path}?_=${Date.now()}`;
+    const res=await fetchWithTimeout(url,{cache:"no-cache"},10000);
+    if(!res.ok)throw new Error(`GitHub raw ${res.status}: ${path}`);
+    try{const data=await res.json();return{data,sha:null,lastMod:Date.now(),source:"raw"};}
+    catch{return{data:fallback,sha:null,lastMod:Date.now(),source:"error"};}
+}
+async function ghPut(path,data,sha,message){
+    const url=`${CONFIG.WORKER_URL}/github-write`;
+    const res=await fetchWithTimeout(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path,data,message})},15000);
+    if(!res.ok){const txt=await res.text();let msg=`Write failed: ${res.status}`;if(res.status===409)msg="Conflict — please retry.";else if(res.status===401||res.status===403)msg="API auth failed.";else{try{msg+=` — ${JSON.parse(txt).message}`;}catch{msg+=` — ${txt.substring(0,80)}`;}}throw new Error(msg);}
+    return res.json();
+}
+async function updateStaticCache(imo,vd){
+    // Build the entry from whatever vessel data we have
+    const entry={imo,name:vd.name||vd.vessel_name||`IMO ${imo}`,flag:vd.flag||"-",ship_type:vd.ship_type||"-",length_overall_m:vd.length_overall_m??"-",beam_m:vd.beam_m??"-",deadweight_t:vd.deadweight_t??"-",gross_tonnage:vd.gross_tonnage??"-",year_of_build:vd.year_of_build??"-"};
+    // Always update local state immediately so the UI benefits right away
+    S.staticCache.set(imo,entry);
+    try{
+        const{data:cache}=await fetchGitHubData(CONFIG.STATIC_CACHE_PATH,{});
+        // Only skip if we already have a fully-populated entry (name is real, not a placeholder)
+        const existing=cache[imo];
+        if(existing&&existing.name&&!existing.name.startsWith("IMO ")){
+            console.log(`Static cache: IMO ${imo} already cached as "${existing.name}", skipping write`);
+            return;
+        }
+        cache[imo]=entry;
+        await ghPut(CONFIG.STATIC_CACHE_PATH,cache,null,`Add static data for IMO ${imo}`);
+        console.log(`Static cache: wrote IMO ${imo} (${entry.name}) to GitHub`);
+    }catch(e){
+        // Log clearly so it's visible in DevTools console
+        console.error(`Static cache write FAILED for IMO ${imo}:`,e.message);
+    }
+}
+
+// FLAG MAP
+function getFlagCode(f){
+    if(!f||["N/A","Unknown","-",""].includes(f))return null;
+    const m={"PANAMA":"PA","MOROCCO":"MA","MALTA":"MT","ANTIGUA & BARBUDA":"AG","SINGAPORE":"SG","MARSHALL ISLANDS":"MH","HONG KONG":"HK","UNITED STATES":"US","FRANCE":"FR","LIBERIA":"LR","GREECE":"GR","CYPRUS":"CY","BAHAMAS":"BS","NORWAY":"NO","UNITED KINGDOM":"GB","NETHERLANDS":"NL","GERMANY":"DE","ITALY":"IT","SPAIN":"ES","PORTUGAL":"PT","BELGIUM":"BE","DENMARK":"DK","SWEDEN":"SE","FINLAND":"FI","RUSSIA":"RU","CHINA":"CN","JAPAN":"JP","SOUTH KOREA":"KR","TAIWAN":"TW","INDIA":"IN","BRAZIL":"BR","ARGENTINA":"AR","CHILE":"CL","AUSTRALIA":"AU","NEW ZEALAND":"NZ","CANADA":"CA","MEXICO":"MX","SOUTH AFRICA":"ZA","EGYPT":"EG","SAUDI ARABIA":"SA","UAE":"AE","QATAR":"QA","TURKEY":"TR","UKRAINE":"UA","POLAND":"PL","PHILIPPINES":"PH","INDONESIA":"ID","MALAYSIA":"MY","VIETNAM":"VN","THAILAND":"TH","BANGLADESH":"BD","PAKISTAN":"PK","IRAN":"IR","IRAQ":"IQ","COMOROS":"KM","PALAU":"PW","TUVALU":"TV","BELIZE":"BZ","CAMBODIA":"KH"};
+    const u=f.toUpperCase();if(m[u])return m[u];for(const[k,v]of Object.entries(m)){if(u.includes(k)||k.includes(u))return v;}const pm=f.match(/\(([A-Z]{2})\)/);if(pm)return pm[1];return null;
+}
+
+// STATUS
+function getVesselStatus(v){
+    if(!v||!v.name||v.sog===undefined||v.sog===null)return"DATA PENDING";
+    const sog=parseFloat(v.sog),dd=parseFloat(v.destination_distance_nm),nd=parseFloat(v.nearest_distance_nm),dest=(v.destination||"").toUpperCase();
+    if(sog<=0.5){if(["ANCHOR","ANCH.","ANCHORAGE","ANCHORING","AT ANCHOR"].some(k=>dest.includes(k)))return"AT ANCHOR";if((!isNaN(dd)&&dd<=CONFIG.ARRIVED_THRESHOLD_NM)||(!isNaN(nd)&&nd<=CONFIG.ARRIVED_THRESHOLD_NM))return"AT PORT";return"STALLED";}
+    return"UNDERWAY";
+}
+
+// TIME
+function formatSignalAge(s){
+    if(!s)return{ageText:"N/A",ageClass:"age-stale",rawAgeMs:Infinity};
+    try{const t=Date.parse(s);if(isNaN(t))return{ageText:"Invalid",ageClass:"age-stale",rawAgeMs:Infinity};const ms=Date.now()-t,h=ms/3600000;let a,c;if(ms<60000){a="Just now";c="age-recent";}else if(h<1){const m=Math.floor(ms/60000);a=`${m}m ago`;c=m<=30?"age-recent":"age-moderate";}else if(h<24){a=`${h.toFixed(1)}h ago`;c=h<=3?"age-recent":"age-moderate";}else{a=`${Math.floor(h/24)}d ago`;c="age-stale";}if(ms>CONFIG.CRITICAL_THRESHOLD_MS)c="status-critical";return{ageText:a,ageClass:c,rawAgeMs:ms};}catch{return{ageText:"Error",ageClass:"age-stale",rawAgeMs:Infinity};}
+}
+function formatLocalTime(s){
+    if(!s)return"N/A";
+    try{const d=new Date(s);if(isNaN(d.getTime()))return"Invalid";const diff=d.getTime()-Date.now(),abs=Math.abs(diff);if(abs<60000)return"Arriving Now";if(diff>0){if(diff<3600000)return`in ${Math.floor(abs/60000)}m`;if(diff<86400000)return`in ${Math.floor(abs/3600000)}h`;}else{if(abs<3600000)return`${Math.floor(abs/60000)}m ago`;if(abs<86400000)return`${Math.floor(abs/3600000)}h ago`;}return d.toLocaleDateString(navigator.language,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}catch{return s;}
+}
+
+// STORAGE
+function saveToLocalStorage(){try{localStorage.setItem("vt_cache",JSON.stringify({vessels:Array.from(S.vesselsDataMap.entries()),tracked:S.trackedImosCache,timestamp:Date.now()}));}catch(e){console.warn(e);}}
+function loadCachedData(){
+    try{const raw=localStorage.getItem("vt_cache");if(!raw)return false;const data=JSON.parse(raw);if(Date.now()-data.timestamp>3600000)return false;S.vesselsDataMap=new Map(data.vessels||[]);S.trackedImosCache=data.tracked||[];if(S.trackedImosCache.length>0){renderVessels(S.trackedImosCache);updateStatus(`${S.trackedImosCache.length} vessels from cache`,"success");return true;}}catch(e){console.warn(e);}return false;
+}
+
+// IMO INPUT
+document.getElementById("imoInput").addEventListener("input",()=>{
+    clearTimeout(S.debounceTimer);
+    const imo=el.imoInput.value.trim();el.namePreview.innerHTML="";
+    if(!/^\d{7}$/.test(imo)){if(imo.length>0)el.namePreview.innerHTML=`<span style="color:var(--danger);font-size:.78rem;">✕ Must be exactly 7 digits</span>`;el.addButton.disabled=true;return;}
+    if(S.trackedImosCache.includes(imo)){el.namePreview.innerHTML=`<span style="color:var(--warning);font-size:.78rem;">⚠ Already tracked</span>`;el.addButton.disabled=true;return;}
+    const isSanc=S.sanctionsLoaded&&S.sanctionedImos.has(imo);
+    const warnHtml=isSanc?`<div style="background:var(--sanction-dim);border:1px solid rgba(255,69,0,.3);border-radius:8px;padding:8px 11px;margin-bottom:6px;font-size:.76rem;"><strong style="color:var(--sanction);">🚨 SANCTIONED VESSEL</strong><div style="color:var(--text-main);margin-top:2px;font-size:.7rem;">${[...new Set((S.sanctionDetails.get(imo)||[]).map(d=>d.list))].join(", ")||"Sanctions list"}</div></div>`:"";
+    if(S.staticCache.has(imo)){const c=S.staticCache.get(imo),fc=getFlagCode(c.flag),fh=fc?`<img src="https://flagcdn.com/24x18/${fc.toLowerCase()}.png" style="width:18px;height:13px;border:1px solid var(--border);border-radius:2px;margin-right:5px;" alt="">`:"";el.namePreview.innerHTML=warnHtml+`<div style="display:flex;align-items:center;gap:5px;font-size:.8rem;">${fh}<strong style="color:#fff;">${c.name||"IMO "+imo}</strong><span style="font-size:.65rem;background:var(--bg-elevated);padding:1px 5px;border-radius:4px;color:var(--text-soft);">cached</span></div>`;el.addButton.disabled=false;return;}
+    S.debounceTimer=setTimeout(async()=>{
+        el.addButton.disabled=true;el.namePreview.innerHTML=warnHtml+`<span style="color:var(--text-soft);font-size:.78rem;">🔍 Looking up...</span>`;
+        try{let data=null;for(const ep of[`${CONFIG.RENDER_API}/vessel-full/${imo}`,`${CONFIG.RENDER_API}/vessel/${imo}`]){try{const r=await fetchWithTimeout(ep,{},5000);if(r.ok){data=await r.json();break;}}catch{}}
+        if(!data||data.found===false){el.namePreview.innerHTML=warnHtml+`<span style="color:var(--danger);font-size:.78rem;">✕ IMO ${imo} not found</span>`;el.addButton.disabled=!isSanc;return;}
+        const fc=getFlagCode(data.flag),fh=fc?`<img src="https://flagcdn.com/24x18/${fc.toLowerCase()}.png" style="width:18px;height:13px;border:1px solid var(--border);border-radius:2px;margin-right:5px;" alt="">`:"";
+        el.namePreview.innerHTML=warnHtml+`<div style="display:flex;align-items:center;gap:5px;font-size:.8rem;">${fh}<strong style="color:#fff;">${data.name||data.vessel_name||"IMO "+imo}</strong><span style="color:var(--text-soft);">${data.ship_type||""} · ${data.flag||""}</span></div>`;
+        el.addButton.disabled=false;updateStaticCache(imo,data).catch(()=>{});}
+        catch{el.namePreview.innerHTML=warnHtml+`<span style="color:var(--warning);font-size:.78rem;">⚠ Lookup failed — you can still add IMO ${imo}</span>`;el.addButton.disabled=false;}
+    },800);
+});
+
+// PORT HELPERS
+function getPortDepthInfo(portName){if(!portName)return null;const port=S.portsData[portName.trim().toUpperCase()];if(!port)return null;const fmt=v=>(v&&v!==0)?`${Number(v).toFixed(1)}m`:"N/A";return{anchor:fmt(port.anchorage_depth),pier:fmt(port.cargo_pier_depth)};}
+function getPortCompatibility(draughtStr){
+    const m=String(draughtStr||"").match(/(\d+\.?\d*)/);if(!m)return null;const draught=parseFloat(m[1]);
+    return[{name:"Tan Tan",key:"TAN TAN"},{name:"Laâyoune",key:"LAAYOUNE"},{name:"Dakhla",key:"DAKHLA"}].map(p=>{
+        const info=S.portsData[p.key];if(!info)return{name:p.name,status:"unknown",pierDepth:null,anchorDepth:null};
+        const pier=info.cargo_pier_depth||0,anchor=info.anchorage_depth||0;
+        return{name:p.name,status:draught<=pier-1?"ok":draught<=pier?"marginal":draught<=anchor?"anchor-only":"incompatible",pierDepth:pier,anchorDepth:anchor,draught};
+    });
+}
+
+// GENERATE ALERTS
+function generateAlerts(newMap,trackedImos){
+    const isFirst=S.previousVesselStates.size===0;
+    for(const imo of trackedImos){
+        const v=newMap.get(imo);if(!v)continue;
+        const ns=getVesselStatus(v),prev=S.previousVesselStates.get(imo),age=formatSignalAge(v.last_pos_utc);
+        if(!isFirst&&prev){
+            if(prev.status!==ns){if(ns==="STALLED")pushAlert("stalled",imo,v.name,`${v.name||"IMO "+imo} has stopped moving`);if(ns==="AT PORT")pushAlert("arrived",imo,v.name,`${v.name||"IMO "+imo} arrived at port`);if(ns==="AT ANCHOR")pushAlert("arrived",imo,v.name,`${v.name||"IMO "+imo} now at anchor`);}
+            if(age.rawAgeMs>CONFIG.STALE_THRESHOLD_MS&&prev.signalAgeMs<=CONFIG.STALE_THRESHOLD_MS)pushAlert("stale",imo,v.name,`${v.name||"IMO "+imo} AIS signal lost (${age.ageText})`);
+            const dd=parseFloat(v.destination_distance_nm);if(!isNaN(dd)&&dd<=50&&(prev.destDist==null||prev.destDist>50))pushAlert("approaching",imo,v.name,`${v.name||"IMO "+imo} approaching (${dd.toFixed(0)} nm)`);
+        }
+        S.previousVesselStates.set(imo,{status:ns,signalAgeMs:age.rawAgeMs,destDist:parseFloat(v.destination_distance_nm)||null});
+    }
+    if(S.sanctionsLoaded)checkFleetSanctions();
+}
+
+// LOAD DATA
+async function loadData(){
+    if(S.isApiBusy)return;S.isApiBusy=true;el.refreshButton.disabled=true;
+    try{
+        let ti,vi,si,pi;
+        try{[ti,vi,si,pi]=await Promise.all([fetchGitHubData(CONFIG.TRACKED_PATH,[]),fetchGitHubData(CONFIG.VESSELS_PATH,{}),fetchGitHubData(CONFIG.STATIC_CACHE_PATH,{}),fetchGitHubData(CONFIG.PORTS_PATH,{})]);}
+        catch{ti=await fetchGitHubData(CONFIG.TRACKED_PATH,[]);vi=await fetchGitHubData(CONFIG.VESSELS_PATH,{});si=await fetchGitHubData(CONFIG.STATIC_CACHE_PATH,{});pi=await fetchGitHubData(CONFIG.PORTS_PATH,{});}
+        const tracked=(Array.isArray(ti.data)?ti.data:ti.data?.tracked_imos||[]).map(String);
+        S.trackedImosCache=tracked;
+        let vl=[];if(Array.isArray(vi.data)){vl=vi.data;}else if(vi.data&&typeof vi.data==="object"){const f=Object.values(vi.data)[0];if(f?.imo)vl=Object.values(vi.data);else if(Array.isArray(f))Object.values(vi.data).forEach(a=>{if(Array.isArray(a))vl=vl.concat(a);});else vl=Object.values(vi.data);}
+        const nm=new Map();vl.filter(v=>v?.imo).forEach(v=>nm.set(String(v.imo),v));
+        S.vesselsDataMap=nm;S.staticCache=new Map(Object.entries(si.data||{}));S.portsData=pi.data||{};
+        saveToLocalStorage();generateAlerts(nm,tracked);updateAlertBadge();
+        updateSystemHealth(vi.lastMod,vl.length,vi.source);updateFleetKPI(tracked);
+        el.vesselCount.textContent=`${tracked.length} vessel${tracked.length!==1?"s":""} tracked`;
+        el.dataStats.textContent=`${vl.length} in database · ${vi.source}`;
+        el.lastUpdated.textContent=`Updated: ${new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;
+        renderVessels(tracked);if(S.mapInitialized)updateMapMarkers();
+        updateStatus(`Fleet loaded — ${tracked.length} vessels`,"success");
+    }catch(error){
+        console.error("Load error:",error);
+        if(!loadCachedData()){updateStatus(`Load failed: ${error.message}`,"error");el.vesselsContainer.innerHTML=`<div class="empty-state"><div class="icon">⚠️</div><p style="color:var(--danger);">${error.message}</p><small>Check network or GitHub token</small></div>`;}
+        else updateStatus("Showing cached data (offline)","warning");
+    }finally{S.isApiBusy=false;el.refreshButton.disabled=false;hideLoading();}
+}
+
+// SYSTEM HEALTH
+function updateSystemHealth(lastMod,count,source){
+    if(!lastMod){el.systemHealth.textContent="Unknown";return;}
+    const ms=Date.now()-lastMod;let text,color,bg;
+    if(ms<3600000){text="● Excellent";color="var(--success)";bg="rgba(16,185,129,.12)";}
+    else if(ms<CONFIG.STALE_THRESHOLD_MS){text="● Good";color="var(--warning)";bg="rgba(245,158,11,.12)";}
+    else if(ms<CONFIG.CRITICAL_THRESHOLD_MS){text="● Stale";color="#f97316";bg="rgba(249,115,22,.12)";}
+    else{text="● Critical";color="var(--danger)";bg="rgba(239,68,68,.12)";}
+    el.systemHealth.textContent=text;el.systemHealth.style.cssText=`color:${color};background:${bg};border-color:${color}40;`;
+}
+
+// FLEET KPI
+function updateFleetKPI(tracked){
+    let uw=0,ap=0,aa=0,st=0,ms=0,vms=0,sanc=0;
+    for(const imo of tracked){const v=S.vesselsDataMap.get(imo);if(!v)continue;const s=getVesselStatus(v);if(s==="UNDERWAY")uw++;else if(s==="AT PORT")ap++;else if(s==="AT ANCHOR")aa++;else if(s==="STALLED")st++;const a=formatSignalAge(v.last_pos_utc);if(a.rawAgeMs!==Infinity){ms+=a.rawAgeMs;vms++;}if(S.sanctionedImos.has(imo))sanc++;}
+    el.kpiTotal.textContent=tracked.length;el.kpiUnderway.textContent=uw;el.kpiAtPort.textContent=ap;el.kpiAtAnchor.textContent=aa;el.kpiStalled.textContent=st;el.kpiSanctioned.textContent=sanc;
+    const hs=tracked.length>0?Math.round(((uw+ap+aa)/tracked.length)*100):100;
+    el.kpiHealth.textContent=`${hs}%`;el.kpiHealth.className=`kpi-value ${hs>=80?"green":hs>=50?"yellow":"red"}`;
+    el.kpiHealthFill.style.width=`${hs}%`;el.kpiHealthFill.style.background=hs>=80?"var(--success)":hs>=50?"var(--warning)":"var(--danger)";
+}
+
+// FILTER
+function setFilter(val,chip){S.currentFilter=val;document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));if(chip)chip.classList.add("active");renderVessels(S.trackedImosCache);}
+function applyFilter(){S.searchQuery=document.getElementById("searchInput").value.trim().toLowerCase();renderVessels(S.trackedImosCache);}
+function passesFilter(imo,v,status){
+    const q=S.searchQuery;if(q&&!(v?.name||"").toLowerCase().includes(q)&&!imo.includes(q))return false;
+    const f=S.currentFilter;if(f==="ALL")return true;if(f==="PRIORITY")return isPriority(imo);if(f==="SANCTIONED")return S.sanctionedImos.has(imo);return status===f;
+}
+
+// MAP
+function initMap(){if(S.mapInitialized)return;S.mapInstance=L.map("mapContainer",{center:[25,-15],zoom:5});L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{attribution:"© OpenStreetMap, © CARTO",maxZoom:18}).addTo(S.mapInstance);S.mapInitialized=true;updateMapMarkers();}
+function updateMapMarkers(){
+    if(!S.mapInitialized)return;S.mapMarkers.forEach(m=>m.remove());S.mapMarkers=[];
+    const colors={UNDERWAY:"#10b981","AT PORT":"#0ea5e9","AT ANCHOR":"#f59e0b",STALLED:"#ef4444","DATA PENDING":"#4e6a84"};
+    for(const imo of S.trackedImosCache){
+        const v=S.vesselsDataMap.get(imo);if(!v||v.lat==null||v.lon==null)continue;
+        const status=getVesselStatus(v),color=S.sanctionedImos.has(imo)?"#ff4500":(colors[status]||"#4e6a84"),cog=v.cog?Number(v.cog):0;
+        const icon=L.divIcon({className:"",html:`<div style="transform:rotate(${cog}deg);width:22px;height:22px;"><svg viewBox="0 0 24 24" fill="${color}" style="filter:drop-shadow(0 0 6px ${color}90);"><path d="M12 2L5 20l7-3.5L19 20Z"/></svg></div>`,iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-12]});
+        const age=formatSignalAge(v.last_pos_utc),isSanc=S.sanctionedImos.has(imo);
+        const popup=`<div style="font-family:sans-serif;min-width:185px;">${isSanc?`<div style="background:rgba(255,69,0,.15);border:1px solid rgba(255,69,0,.3);border-radius:5px;padding:4px 8px;margin-bottom:7px;font-size:.7rem;color:#ff4500;font-weight:700;">🚨 SANCTIONED</div>`:""}<div style="font-weight:700;font-size:.9rem;color:#fff;margin-bottom:3px;">${v.name||"IMO "+imo}</div><div style="font-size:.7rem;color:#94a3b8;margin-bottom:7px;">IMO ${imo} · ${v.flag||"—"}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:.74rem;"><div><span style="color:#64748b;">Status</span><br><strong style="color:${color};">${status}</strong></div><div><span style="color:#64748b;">Signal</span><br><strong>${age.ageText}</strong></div><div><span style="color:#64748b;">Speed</span><br><strong>${v.sog!=null?Number(v.sog).toFixed(1)+" kn":"—"}</strong></div><div><span style="color:#64748b;">Course</span><br><strong>${v.cog!=null?Number(v.cog).toFixed(0)+"°":"—"}</strong></div></div>${v.destination?`<div style="margin-top:6px;font-size:.7rem;"><span style="color:#64748b;">Dest: </span><strong>${v.destination}</strong></div>`:""}</div>`;
+        const marker=L.marker([Number(v.lat),Number(v.lon)],{icon}).bindPopup(popup);marker.addTo(S.mapInstance);S.mapMarkers.push(marker);
+    }
+}
+function toggleView(view){
+    S.currentView=view;
+    if(view==="map"){el.listView.classList.add("hidden");el.mapView.classList.remove("hidden");el.viewListBtn?.classList.remove("active");el.viewMapBtn?.classList.add("active");setTimeout(()=>{initMap();S.mapInstance?.invalidateSize();},60);}
+    else{el.mapView.classList.add("hidden");el.listView.classList.remove("hidden");el.viewMapBtn?.classList.remove("active");el.viewListBtn?.classList.add("active");}
+}
+
+// MOBILE NAV
+function mobileNav(tab){
+    ["navFleet","navMap","navAdd","navExport"].forEach(id=>document.getElementById(id)?.classList.remove("active"));
+    if(tab==="fleet"){document.getElementById("navFleet")?.classList.add("active");el.addCard.classList.add("hidden");toggleView("list");}
+    else if(tab==="map"){document.getElementById("navMap")?.classList.add("active");el.addCard.classList.add("hidden");toggleView("map");}
+    else if(tab==="add"){document.getElementById("navAdd")?.classList.add("active");el.addCard.classList.remove("hidden");el.addCard.scrollIntoView({behavior:"smooth"});setTimeout(()=>el.imoInput.focus(),300);}
+    else if(tab==="export"){document.getElementById("navExport")?.classList.add("active");exportCSV();}
+}
+
+// EXPORT
+function exportCSV(){
+    const h=["IMO","Vessel","Status","Sanctioned","Priority","Flag","Lat","Lon","Speed(kn)","Course","Destination","Signal Age","DWT","Ship Type","LOA(m)","Built","Draught(m)"];
+    const rows=S.trackedImosCache.map(imo=>{const v=S.vesselsDataMap.get(imo)||{},a=formatSignalAge(v.last_pos_utc);return[imo,v.name||"",getVesselStatus(v),S.sanctionedImos.has(imo)?"YES":"NO",isPriority(imo)?"YES":"NO",v.flag||"",v.lat||"",v.lon||"",v.sog!=null?Number(v.sog).toFixed(1):"",v.cog!=null?Number(v.cog).toFixed(0):"",v.destination||"",a.ageText,v.deadweight_t||"",v.ship_type||"",v.length_overall_m||"",v.year_of_build||"",v.draught_m||""];});
+    const csv=[h,...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
+    Object.assign(document.createElement("a"),{href:url,download:`fleet_${new Date().toISOString().slice(0,10)}.csv`}).click();
+    URL.revokeObjectURL(url);updateStatus("Fleet report exported","success");
+}
+
+// SORT / FILTER
+function setSort(key){S.currentSortKey=key;localStorage.setItem("vt_sort",key);renderVessels(S.trackedImosCache);}
+function toggleDetails(imo){document.getElementById(`details-${imo}`)?.classList.toggle("open");}
+
+// IMO CRUD
+function validateIMO(imo){
+    if(!/^\d{7}$/.test(imo))return false;
+    const digits=imo.split("").map(Number);
+    const check=digits.slice(0,6).reduce((sum,d,i)=>sum+d*(7-i),0)%10;
+    return check===digits[6];
+}
+async function addIMO(){
+    const imo=el.imoInput.value.trim();
+    if(!imo||S.isApiBusy||!/^\d{7}$/.test(imo)){updateStatus("Invalid IMO — must be 7 digits","error");return;}
+    if(!validateIMO(imo)){updateStatus("Invalid IMO — checksum failed","error");return;}
+    if(S.trackedImosCache.includes(imo)){updateStatus("Already tracked","warning");return;}
+    showLoading(`Adding IMO ${imo}...`);await updateTrackedImos(imo,true);
+    pushAlert("added",imo,imo,`IMO ${imo} added to fleet tracking`);
+    if(S.sanctionsLoaded&&S.sanctionedImos.has(imo)){const d=S.sanctionDetails.get(imo)||[];pushAlert("sanctioned",imo,imo,`🚨 SANCTIONED VESSEL added: IMO ${imo} on ${[...new Set(d.map(x=>x.list))].join(", ")||"sanctions list"}`);}
+    // Ensure static cache is always written when a vessel is confirmed added
+    if(S.staticCache.has(imo)){
+        updateStaticCache(imo,S.staticCache.get(imo)).catch(e=>console.error("Static cache on add:",e));
+    } else {
+        // No local data yet — fetch and write
+        (async()=>{try{let vd=null;for(const ep of[`${CONFIG.RENDER_API}/vessel-full/${imo}`,`${CONFIG.RENDER_API}/vessel/${imo}`]){try{const r=await fetchWithTimeout(ep,{},5000);if(r.ok){vd=await r.json();break;}}catch{}}if(vd&&vd.found!==false)await updateStaticCache(imo,vd);}catch(e){console.error("Static cache lookup on add:",e);}})();
+    }
+    hideLoading();
+}
+async function removeIMO(imo){if(!imo||S.isApiBusy)return;const name=S.vesselsDataMap.get(imo)?.name||`IMO ${imo}`;S.vesselToRemove=imo;el.confirmTitle.textContent="Remove Vessel";el.confirmMsg.textContent=`Remove "${name}" (IMO ${imo}) from fleet tracking?`;el.confirmModal.classList.remove("hidden");}
+async function removeIMOConfirmed(imo){showLoading(`Removing IMO ${imo}...`);await updateTrackedImos(imo,false);hideLoading();}
+async function updateTrackedImos(imo,isAdd){
+    S.isApiBusy=true;el.refreshButton.disabled=true;
+    for(let attempt=1;attempt<=2;attempt++){
+        try{
+            updateStatus(`${isAdd?"Adding":"Removing"} (${attempt}/2)...`);
+            const result=await fetchGitHubData(CONFIG.TRACKED_PATH,[]);
+            let list=(Array.isArray(result.data)?result.data:result.data?.tracked_imos||[]).map(String).filter(Boolean);
+            if(isAdd){if(!list.includes(imo))list.push(imo);}else{list=list.filter(x=>x!==imo);}list.sort();
+            await ghPut(CONFIG.TRACKED_PATH,list,null,`${isAdd?"Add":"Remove"} IMO ${imo}`);
+            updateStatus(`${isAdd?"Added":"Removed"} IMO ${imo}`,"success");
+            if(isAdd){el.imoInput.value="";el.namePreview.innerHTML="";el.addButton.disabled=true;}
+            await loadData();break;
+        }catch(error){
+            if(attempt<2){updateStatus("Retrying...","warning");await new Promise(r=>setTimeout(r,1000));}
+            else{updateStatus(`Failed: ${error.message}`,"error");if(isAdd)S.trackedImosCache.push(imo);else S.trackedImosCache=S.trackedImosCache.filter(x=>x!==imo);saveToLocalStorage();renderVessels(S.trackedImosCache);}
+        }
+    }
+    S.isApiBusy=false;el.refreshButton.disabled=false;
+}
+
+// PULL TO REFRESH
+function initPullToRefresh(){
+    let startY=0,pulling=false;const ptr=document.getElementById("ptrIndicator");
+    document.addEventListener("touchstart",e=>{if(window.scrollY===0){startY=e.touches[0].clientY;pulling=true;}},{passive:true});
+    document.addEventListener("touchmove",e=>{if(!pulling)return;if(e.touches[0].clientY-startY>60){ptr.classList.add("show");ptr.textContent="↓ Release to refresh";}},{passive:true});
+    document.addEventListener("touchend",e=>{if(!pulling)return;pulling=false;const dy=e.changedTouches[0].clientY-startY;if(dy>60){ptr.textContent="↻ Refreshing...";loadData().then(()=>ptr.classList.remove("show"));}else ptr.classList.remove("show");});
+}
+
+// RENDER VESSELS
+function renderVessels(tracked){
+    if(!tracked||tracked.length===0){el.vesselsContainer.innerHTML=`<div class="empty-state"><div class="icon">🚢</div><p>No vessels tracked yet.</p><small>Add an IMO number above</small></div>`;return;}
+    const ORDER={UNDERWAY:0,"AT PORT":1,"AT ANCHOR":2,STALLED:3,"DATA PENDING":4};
+    const items=tracked.map(imo=>{const v=S.vesselsDataMap.get(imo)||{},status=getVesselStatus(v),ageData=formatSignalAge(v.last_pos_utc),prio=isPriority(imo),sanc=S.sanctionedImos.has(imo);return{imo,v,status,ageData,name:v.name||"Loading...",rawAgeMs:ageData.rawAgeMs,isPending:!v.name,prio,sanc};}).filter(({imo,v,status})=>passesFilter(imo,v,status));
+    items.sort((a,b)=>{
+        if(S.currentSortKey==="PRIORITY"){if(a.sanc!==b.sanc)return a.sanc?-1:1;if(a.prio!==b.prio)return a.prio?-1:1;return(ORDER[a.status]??5)-(ORDER[b.status]??5);}
+        switch(S.currentSortKey){case"NAME_ASC":return a.name.localeCompare(b.name);case"NAME_DESC":return b.name.localeCompare(a.name);case"STATUS_ASC":return((ORDER[a.status]??5)-(ORDER[b.status]??5))||a.name.localeCompare(b.name);case"AGE_ASC":return a.rawAgeMs-b.rawAgeMs;default:return b.rawAgeMs-a.rawAgeMs;}
+    });
+    if(!items.length){el.vesselsContainer.innerHTML=`<div class="empty-state"><div class="icon">🔍</div><p>No vessels match this filter.</p></div>`;return;}
+    el.vesselsContainer.innerHTML="";
+    const CI={ok:`<span class="compat-ok">✔</span>`,marginal:`<span class="compat-warn">⚠</span>`,"anchor-only":`<span class="compat-warn">⚓</span>`,incompatible:`<span class="compat-no">✗</span>`,unknown:`<span class="compat-unk">?</span>`};
+    items.forEach(({imo,v,status,ageData,isPending,prio,sanc})=>{try{
+        const sc={UNDERWAY:"underway","AT PORT":"at_port","AT ANCHOR":"at_anchor",STALLED:"stalled"}[status]||"";
+        const tc={UNDERWAY:"status-underway","AT PORT":"status-at_port","AT ANCHOR":"status-at_anchor",STALLED:"status-stalled","DATA PENDING":"status-unknown"}[status]||"status-unknown";
+        const fc=getFlagCode(v.flag);
+        const fh=fc?`<img src="https://flagcdn.com/24x18/${fc.toLowerCase()}.png" class="flag-icon" alt="${v.flag||""}">`:`<div class="flag-placeholder">🏴</div>`;
+        const loaHtml=v.length_overall_m?`<span class="vessel-loa">${Number(v.length_overall_m).toFixed(0)}m${v.draught_m?" / "+v.draught_m:""}</span>`:"";
+        const np=v.nearest_port_name||v.nearest_port,di=np?getPortDepthInfo(np):null;
+        const depthH=di?`<span class="tag depth">⚓ ${di.anchor}</span><span class="tag depth">🏭 ${di.pier}</span>`:"";
+        const compat=getPortCompatibility(v.draught_m);
+        const etaR=formatEtaCountdown(v.eta_utc);
+        const sancBanner=sanc?`<div class="sanction-banner"><div class="sanction-banner-icon">🚨</div><div class="sanction-banner-body"><div class="sanction-banner-title">SANCTIONED — ${[...new Set((S.sanctionDetails.get(imo)||[]).map(d=>d.list))].join(" · ")||"Sanctions List"}</div><div class="sanction-banner-detail">${(S.sanctionDetails.get(imo)||[])[0]?.name||"Appears on OFAC, UN, and/or EU sanctions lists."}</div></div></div>`:"";
+        const compatH=compat?`<div class="section-divider"></div><div class="section-mini-title">Port Compatibility · Draught ${compat[0].draught}m</div><div class="compat-grid">${compat.map(p=>`<div class="compat-port">${CI[p.status]||CI.unknown}<div><div class="compat-port-name">${p.name}</div><div class="compat-port-depth">${p.pierDepth!=null?"Pier "+p.pierDepth+"m / Anch "+p.anchorDepth+"m":"No depth data"}</div></div></div>`).join("")}</div>`:"";
+        const notesH=`<div class="section-divider"></div><div class="section-mini-title">📋 Notes <span id="notes-saved-${imo}" class="notes-saved">✓ Saved</span></div><textarea id="notes-${imo}" oninput="onNoteInput('${imo}',this)" placeholder="Agent contact, cargo, special instructions...">${getNotes(imo)}</textarea>`;
+        const staticH=`<div class="expanded-grid"><div class="exp-item"><div class="exp-label">Ship Type</div><div class="exp-val">${v.ship_type||"—"}</div></div><div class="exp-item"><div class="exp-label">DWT</div><div class="exp-val">${v.deadweight_t?formatNumber(Number(v.deadweight_t)/1000)+"k t":"—"}</div></div><div class="exp-item"><div class="exp-label">Gross Tonnage</div><div class="exp-val">${v.gross_tonnage?Number(v.gross_tonnage).toLocaleString()+" t":"—"}</div></div><div class="exp-item"><div class="exp-label">Built</div><div class="exp-val">${v.year_of_build||"—"}</div></div><div class="exp-item"><div class="exp-label">Length</div><div class="exp-val">${v.length_overall_m?Number(v.length_overall_m).toFixed(1)+" m":"—"}</div></div><div class="exp-item"><div class="exp-label">Beam</div><div class="exp-val">${v.beam_m?Number(v.beam_m).toFixed(1)+" m":"—"}</div></div><div class="exp-item"><div class="exp-label">MMSI</div><div class="exp-val">${v.mmsi||"—"}</div></div><div class="exp-item"><div class="exp-label">AIS Source</div><div class="exp-val">${v.ais_source||"—"}</div></div></div>${compatH}${notesH}`;
+        const card=document.createElement("div");
+        card.className=`vessel-card ${sanc?"sanctioned":prio?"priority":sc}`;
+        card.innerHTML=`${sancBanner}<div class="vessel-card-inner">${prio&&!sanc?`<div class="priority-indicator"></div>`:""}<div class="vessel-main" onclick="toggleDetails('${imo}')"><div class="vessel-top"><div><div class="vessel-name-block">${fh}<span class="vessel-name">${v.name||"Loading..."}</span>${sanc?`<span class="tag sanction-tag">🚨 Sanctioned</span>`:prio?`<span style="font-size:.82rem;">🚩</span>`:""} ${loaHtml}</div><div class="vessel-imo">IMO ${imo}</div></div><span class="tag ${tc}">${status}</span></div>${isPending?`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;color:var(--text-soft);font-size:.76rem;"><div class="spinner" style="width:14px;height:14px;margin:0;"></div>Waiting for data...</div>`:`<div class="vessel-meta"><div class="meta-row"><span class="meta-label">Signal</span><span class="meta-val ${ageData.ageClass}">${ageData.ageText}</span></div><div class="meta-row"><span class="meta-label">Dest.</span><span class="meta-val">${v.destination||"—"}</span></div><div class="meta-row"><span class="meta-label">Position</span><span class="meta-val"><span class="tag position">${v.lat!=null?Number(v.lat).toFixed(3):"—"}, ${v.lon!=null?Number(v.lon).toFixed(3):"—"}</span></span></div><div class="meta-row"><span class="meta-label">ETA</span><span class="meta-val">${etaR?`<span class="eta-countdown ${etaR.cls}" data-eta="${v.eta_utc||""}">${etaR.text}</span>`:(formatLocalTime(v.eta_utc)||"—")}</span></div></div><div class="tag-row">${v.sog!=null?`<span class="tag speed">⚡ ${Number(v.sog).toFixed(1)} kn</span>`:""}${v.cog!=null?`<span class="tag">🧭 ${Number(v.cog).toFixed(0)}°</span>`:""}${np?`<span class="tag">🏝 ${np}${v.nearest_distance_nm?" "+Number(v.nearest_distance_nm).toFixed(0)+" nm":""}</span>`:""}${depthH}${v.destination_distance_nm?`<span class="tag distance">🎯 ${Number(v.destination_distance_nm).toFixed(0)} nm</span>`:""}<div id="weather-${imo}" style="display:contents;"></div></div><div class="hint-text">Tap to expand · ${v.flag||"—"}</div>`}</div></div><div id="details-${imo}" class="vessel-expanded">${staticH}</div><div class="vessel-footer"><span class="vessel-footer-meta">AIS: ${v.ais_source||"—"} · ${ageData.ageText}</span><div class="vessel-footer-actions"><button class="${prio?"urgent-btn":"ghost"}" style="padding:5px 9px;font-size:.68rem;" onclick="event.stopPropagation();togglePriority('${imo}')">${prio?"🚩 Priority":"⚑ Flag"}</button><button class="danger" style="padding:5px 9px;font-size:.68rem;" onclick="event.stopPropagation();removeIMO('${imo}')">Remove</button></div></div>`;
+        el.vesselsContainer.appendChild(card);
+        if(v.lat!=null&&v.lon!=null)fetchAndRenderWeather(imo,v.lat,v.lon);
+    }catch(err){console.warn(`Card render error IMO ${imo}:`,err);}});
+    startEtaCountdowns();
+}
+
+// INIT
+function init(){
+    console.log("🚢 VesselTracker v5.4");
+    console.log("🔒 VesselTracker v5.4 — token-free client");
+    if(el.sortSelect)el.sortSelect.value=S.currentSortKey;
+    renderAlerts();updateAlertBadge();loadCachedData();loadData();
+    S.refreshInterval=setInterval(loadData,CONFIG.REFRESH_INTERVAL);
+    checkApiStatus();
+    loadSanctionsLists().catch(e=>{console.warn("Sanctions:",e);if(el.sanctionsStatus)el.sanctionsStatus.innerHTML=`<span style="color:var(--warning);font-size:.68rem;font-family:var(--mono);">⚠ Sanctions unavailable</span>`;});
+    el.confirmCancel.addEventListener("click",()=>{el.confirmModal.classList.add("hidden");S.vesselToRemove=null;});
+    el.confirmOk.addEventListener("click",()=>{if(S.vesselToRemove)removeIMOConfirmed(S.vesselToRemove);el.confirmModal.classList.add("hidden");});
+    initPullToRefresh();
+    if(window.innerWidth<641)el.addCard.classList.add("hidden");
+    el.imoInput.addEventListener("input",()=>{
+        const v=el.imoInput.value.trim();
+        if(v.length===7){el.imoInput.style.borderColor=validateIMO(v)?"var(--success)":"var(--danger)";}
+        else{el.imoInput.style.borderColor="";}
+    });
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+</script>
+</body>
+</html>
