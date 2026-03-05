@@ -142,6 +142,17 @@
     "gross_tonnage": "41589",
     "year_of_build": "2004"
   },
+  "9297204": {
+    "imo": "9297204",
+    "name": "DENSA DEFNE",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "119.10",
+    "beam_m": "16.90",
+    "deadweight_t": "7108",
+    "gross_tonnage": "4745",
+    "year_of_build": "2004"
+  },
   "9303091": {
     "imo": "9303091",
     "name": "NAFISA JAHAN",
