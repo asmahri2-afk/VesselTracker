@@ -32,7 +32,7 @@
     "lon": -14.82467,
     "sog": 10.3,
     "cog": 210.2,
-    "last_pos_utc": "Mar 5, 2026 21:57 UTC",
+    "last_pos_utc": "Mar 5, 2026 23:35 UTC",
     "destination": "Las Palmas, Spain",
     "done": false,
     "ship_type": "Chemical/Oil Products Tanker",
@@ -48,7 +48,7 @@
     "destination_port": "LAS PALMAS",
     "destination_distance_nm": 38.02335734397564,
     "eta_hours": 3.69158809164812,
-    "eta_utc": "2026-03-06 01:39:41 UTC",
+    "eta_utc": "2026-03-06 03:17:06 UTC",
     "eta_text": "3h 41m"
   },
   "9346407": {
@@ -110,7 +110,7 @@
     "lon": -16.4893,
     "sog": 0.0,
     "cog": 223.0,
-    "last_pos_utc": "Mar 5, 2026 21:43 UTC",
+    "last_pos_utc": "Mar 5, 2026 23:27 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
