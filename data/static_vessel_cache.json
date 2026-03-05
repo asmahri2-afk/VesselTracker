@@ -76,6 +76,17 @@
     "gross_tonnage": "194",
     "year_of_build": "1979"
   },
+  "9034690": {
+    "imo": "9034690",
+    "name": "NOOH GAS",
+    "flag": "Botswana",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "159.98",
+    "beam_m": "25.60",
+    "deadweight_t": "23257",
+    "gross_tonnage": "18360",
+    "year_of_build": "1993"
+  },
   "9128013": {
     "imo": "9128013",
     "name": "RIGHT STEP",
