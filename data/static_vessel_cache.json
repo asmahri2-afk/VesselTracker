@@ -153,6 +153,17 @@
     "gross_tonnage": "4745",
     "year_of_build": "2004"
   },
+  "9299563": {
+    "imo": "9299563",
+    "name": "NORTH STAR",
+    "flag": "Barbados",
+    "ship_type": "Crude Oil Tanker",
+    "length_overall_m": "228.60",
+    "beam_m": "32.25",
+    "deadweight_t": "72807",
+    "gross_tonnage": "40690",
+    "year_of_build": "2005"
+  },
   "9303091": {
     "imo": "9303091",
     "name": "NAFISA JAHAN",
@@ -295,17 +306,6 @@
     "deadweight_t": "7003",
     "gross_tonnage": "4808",
     "year_of_build": "2008"
-  },
-  "9437854": {
-    "imo": "9437854",
-    "name": "CKR ZEYNEP",
-    "flag": "San Marino",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "99.89",
-    "beam_m": "16.60",
-    "deadweight_t": "6478",
-    "gross_tonnage": "4109",
-    "year_of_build": "2010"
   },
   "9443061": {
     "imo": "9443061",
