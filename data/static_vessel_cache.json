@@ -296,6 +296,17 @@
     "gross_tonnage": "4808",
     "year_of_build": "2008"
   },
+  "9437854": {
+    "imo": "9437854",
+    "name": "CKR ZEYNEP",
+    "flag": "San Marino",
+    "ship_type": "General Cargo Ship",
+    "length_overall_m": "99.89",
+    "beam_m": "16.60",
+    "deadweight_t": "6478",
+    "gross_tonnage": "4109",
+    "year_of_build": "2010"
+  },
   "9443061": {
     "imo": "9443061",
     "name": "SEN ARCHE",
