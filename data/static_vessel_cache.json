@@ -490,15 +490,16 @@
     "year_of_build": "2017"
   },
   "9755957": {
-    "imo": "9755957",
-    "name": "MSC ELOANE",
-    "flag": "Liberia",
-    "ship_type": "Container Ship",
-    "length_overall_m": "399.99",
-    "beam_m": "58.85",
     "deadweight_t": "221354",
     "gross_tonnage": "194250",
-    "year_of_build": "2016"
+    "year_of_build": "2016",
+    "length_overall_m": "399.99",
+    "beam_m": "58.85",
+    "draught_m": "12.0 m",
+    "predicted_eta": null,
+    "name": "MSC ELOANE",
+    "ship_type": "Container Ship",
+    "flag": "Liberia"
   },
   "9777541": {
     "imo": "9777541",
