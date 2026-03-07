@@ -210,6 +210,17 @@
     "gross_tonnage": "30936",
     "year_of_build": "2006"
   },
+  "9321483": {
+    "imo": "9321483",
+    "name": "EMMA MAERSK",
+    "flag": "Singapore",
+    "ship_type": "Container Ship",
+    "length_overall_m": "397.71",
+    "beam_m": "56.40",
+    "deadweight_t": "174239",
+    "gross_tonnage": "171542",
+    "year_of_build": "2006"
+  },
   "9323314": {
     "imo": "9323314",
     "name": "ADITYA",
