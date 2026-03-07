@@ -76,9 +76,9 @@
     "nearest_distance_nm": 24.942275804881042,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 24.942275804881042,
-    "eta_hours": 35.63182257840149,
-    "eta_utc": "2026-03-09 06:35:12 UTC",
-    "eta_text": "1d 11h"
+    "eta_hours": null,
+    "eta_utc": null,
+    "eta_text": null
   },
   "9427079": {
     "imo": "9427079",
@@ -131,7 +131,7 @@
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 442.4863413132344,
     "eta_hours": 77.62918268653235,
-    "eta_utc": "2026-03-11 00:35:06 UTC",
+    "eta_utc": "2026-03-11 01:22:09 UTC",
     "eta_text": "3d 5h"
   },
   "9501655": {
@@ -140,8 +140,8 @@
     "lat": 28.0,
     "lon": -16.0,
     "sog": 0.0,
-    "cog": 348.0,
-    "last_pos_utc": "Mar 7, 2026 18:30 UTC",
+    "cog": 323.0,
+    "last_pos_utc": "Mar 7, 2026 19:40 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -164,11 +164,11 @@
   "9933913": {
     "imo": "9933913",
     "name": "CHALLAH",
-    "lat": 27.89247,
-    "lon": -15.21193,
-    "sog": 9.2,
-    "cog": 357.2,
-    "last_pos_utc": "Mar 7, 2026 18:56 UTC",
+    "lat": 28.0777,
+    "lon": -15.32722,
+    "sog": 10.5,
+    "cog": 307.9,
+    "last_pos_utc": "Mar 7, 2026 19:44 UTC",
     "destination": "Las Palmas, Spain",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -179,13 +179,13 @@
     "length_overall_m": "117.53",
     "beam_m": "19.50",
     "draught_m": "5.3 m",
-    "last_alert_utc": "2026-03-07T18:57:24.256887+00:00",
-    "nearest_port": "LAS PALMAS ANCH",
-    "nearest_distance_nm": 17.966495958244735,
+    "last_alert_utc": "2026-03-07T19:44:27.555299+00:00",
+    "nearest_port": "LAS PALMAS",
+    "nearest_distance_nm": 6.378381666176731,
     "destination_port": "LAS PALMAS",
-    "destination_distance_nm": 18.45101224450387,
-    "eta_hours": 2.0055448091852033,
-    "eta_utc": "2026-03-07 20:57:44 UTC",
-    "eta_text": "2h"
+    "destination_distance_nm": 6.378381666176731,
+    "eta_hours": 0.6074649205882601,
+    "eta_utc": "2026-03-07 20:20:54 UTC",
+    "eta_text": "0h 36m"
   }
 }
