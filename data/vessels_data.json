@@ -140,8 +140,8 @@
     "lat": 28.0,
     "lon": -16.0,
     "sog": 0.0,
-    "cog": 306.0,
-    "last_pos_utc": "Mar 7, 2026 10:25 UTC",
+    "cog": 321.0,
+    "last_pos_utc": "Mar 7, 2026 11:30 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -166,9 +166,9 @@
     "name": "CHALLAH",
     "lat": 27.0,
     "lon": -15.0,
-    "sog": 9.9,
-    "cog": 357.0,
-    "last_pos_utc": "Mar 7, 2026 10:48 UTC",
+    "sog": 9.5,
+    "cog": 348.0,
+    "last_pos_utc": "Mar 7, 2026 11:41 UTC",
     "destination": "Las Palmas, Spain",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -184,8 +184,8 @@
     "nearest_distance_nm": 68.43291006845674,
     "destination_port": "LAS PALMAS",
     "destination_distance_nm": 71.68249307297685,
-    "eta_hours": 7.240655865957257,
-    "eta_utc": "2026-03-07 18:04:31 UTC",
-    "eta_text": "7h 14m"
+    "eta_hours": 7.545525586629142,
+    "eta_utc": "2026-03-07 19:16:47 UTC",
+    "eta_text": "7h 33m"
   }
 }
