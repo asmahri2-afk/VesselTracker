@@ -489,6 +489,17 @@
     "gross_tonnage": "36421",
     "year_of_build": "2017"
   },
+  "9733571": {
+    "imo": "9733571",
+    "name": "EPIC SARDINIA",
+    "flag": "Singapore",
+    "ship_type": "LPG Tanker",
+    "length_overall_m": "119.98",
+    "beam_m": "21.02",
+    "deadweight_t": "8933",
+    "gross_tonnage": "8319",
+    "year_of_build": "2017"
+  },
   "9755957": {
     "deadweight_t": "221354",
     "gross_tonnage": "194250",
