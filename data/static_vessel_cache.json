@@ -110,15 +110,16 @@
     "year_of_build": "2000"
   },
   "9212448": {
-    "imo": "9212448",
-    "name": "STORM I",
-    "flag": "Panama",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "100.58",
-    "beam_m": "18.80",
     "deadweight_t": "6962",
     "gross_tonnage": "4450",
-    "year_of_build": "1999"
+    "year_of_build": "1999",
+    "length_overall_m": "100.58",
+    "beam_m": "18.80",
+    "draught_m": "6.7 m",
+    "predicted_eta": null,
+    "name": "STORM I",
+    "ship_type": "General Cargo Ship",
+    "flag": "Panama"
   },
   "9234276": {
     "imo": "9234276",
@@ -143,15 +144,16 @@
     "year_of_build": "2004"
   },
   "9297204": {
-    "imo": "9297204",
-    "name": "DENSA DEFNE",
-    "flag": "Malta",
-    "ship_type": "Chemical/Oil Products Tanker",
-    "length_overall_m": "119.10",
-    "beam_m": "16.90",
     "deadweight_t": "7108",
     "gross_tonnage": "4745",
-    "year_of_build": "2004"
+    "year_of_build": "2004",
+    "length_overall_m": "119.10",
+    "beam_m": "16.90",
+    "draught_m": "5.0 m",
+    "predicted_eta": null,
+    "name": "DENSA DEFNE",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "flag": "Malta"
   },
   "9299563": {
     "imo": "9299563",
@@ -231,15 +233,16 @@
     "year_of_build": "2007"
   },
   "9346407": {
-    "imo": "9346407",
-    "name": "CGAS MARGRETHE",
-    "flag": "Malta",
-    "ship_type": "LPG Tanker",
-    "length_overall_m": "99.98",
-    "beam_m": "17.20",
     "deadweight_t": "4970",
     "gross_tonnage": "4253",
-    "year_of_build": "2006"
+    "year_of_build": "2006",
+    "length_overall_m": "99.98",
+    "beam_m": "17.20",
+    "draught_m": "5.9 m",
+    "predicted_eta": null,
+    "name": "CGAS MARGRETHE",
+    "ship_type": "LPG Tanker",
+    "flag": "Malta"
   },
   "9364150": {
     "imo": "9364150",
@@ -286,15 +289,16 @@
     "year_of_build": "2010"
   },
   "9427079": {
-    "imo": "9427079",
-    "name": "BBC GREENLAND",
-    "flag": "Antigua & Barbuda",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "119.81",
-    "beam_m": "20.53",
     "deadweight_t": "7536",
     "gross_tonnage": "7002",
-    "year_of_build": "2007"
+    "year_of_build": "2007",
+    "length_overall_m": "119.81",
+    "beam_m": "20.53",
+    "draught_m": "6.1 m",
+    "predicted_eta": null,
+    "name": "BBC GREENLAND",
+    "ship_type": "General Cargo Ship",
+    "flag": "Antigua & Barbuda"
   },
   "9428889": {
     "imo": "9428889",
@@ -363,15 +367,16 @@
     "year_of_build": "2010"
   },
   "9501655": {
-    "imo": "9501655",
-    "name": "BBC BELEM",
-    "flag": "Antigua & Barbuda",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "128.97",
-    "beam_m": "16.71",
     "deadweight_t": "8129",
     "gross_tonnage": "6310",
-    "year_of_build": "2012"
+    "year_of_build": "2012",
+    "length_overall_m": "128.97",
+    "beam_m": "16.71",
+    "draught_m": "4.7 m",
+    "predicted_eta": null,
+    "name": "BBC BELEM",
+    "ship_type": "General Cargo Ship",
+    "flag": "Antigua & Barbuda"
   },
   "9518880": {
     "imo": "9518880",
@@ -528,15 +533,16 @@
     "year_of_build": "2024"
   },
   "9933913": {
-    "imo": "9933913",
-    "name": "CHALLAH",
-    "flag": "Morocco",
-    "ship_type": "Oil Products Tanker",
-    "length_overall_m": "117.53",
-    "beam_m": "19.50",
     "deadweight_t": "9137",
     "gross_tonnage": "6822",
-    "year_of_build": "2022"
+    "year_of_build": "2022",
+    "length_overall_m": "117.53",
+    "beam_m": "19.50",
+    "draught_m": "5.3 m",
+    "predicted_eta": null,
+    "name": "CHALLAH",
+    "ship_type": "Oil Products Tanker",
+    "flag": "Morocco"
   },
   "9983865": {
     "imo": "9983865",
@@ -559,5 +565,17 @@
     "deadweight_t": "156100",
     "gross_tonnage": "155768",
     "year_of_build": "2025"
+  },
+  "9437854": {
+    "deadweight_t": "6478",
+    "gross_tonnage": "4109",
+    "year_of_build": "2010",
+    "length_overall_m": "99.89",
+    "beam_m": "16.60",
+    "draught_m": "4.1 m",
+    "predicted_eta": null,
+    "name": "CKR ZEYNEP",
+    "ship_type": "General Cargo Ship",
+    "flag": "San Marino"
   }
 }
