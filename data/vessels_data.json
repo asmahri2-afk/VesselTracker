@@ -50,7 +50,7 @@
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 29.671154565595245,
     "eta_hours": 3.574837899469306,
-    "eta_utc": "2026-03-07 10:40:28 UTC",
+    "eta_utc": "2026-03-07 11:24:30 UTC",
     "eta_text": "3h 34m"
   },
   "9346407": {
@@ -58,9 +58,9 @@
     "name": "CGAS MARGRETHE",
     "lat": 27.0,
     "lon": -13.0,
-    "sog": 0.2,
-    "cog": 67.0,
-    "last_pos_utc": "Mar 7, 2026 03:13 UTC",
+    "sog": 0.5,
+    "cog": 325.0,
+    "last_pos_utc": "Mar 7, 2026 07:25 UTC",
     "destination": "Laayoune (El Aaiun) Anch., Morocco",
     "done": true,
     "ship_type": "LPG Tanker",
@@ -76,9 +76,9 @@
     "nearest_distance_nm": 24.942275804881042,
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 24.942275804881042,
-    "eta_hours": null,
-    "eta_utc": null,
-    "eta_text": null
+    "eta_hours": 49.884551609762084,
+    "eta_utc": "2026-03-09 09:43:07 UTC",
+    "eta_text": "2d 1h"
   },
   "9427079": {
     "imo": "9427079",
@@ -112,9 +112,9 @@
     "name": "CKR ZEYNEP",
     "lat": 20.0,
     "lon": -17.0,
-    "sog": 7.6,
-    "cog": 332.5,
-    "last_pos_utc": "Mar 7, 2026 06:52 UTC",
+    "sog": 7.3,
+    "cog": 339.1,
+    "last_pos_utc": "Mar 7, 2026 07:19 UTC",
     "destination": "",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -141,7 +141,7 @@
     "lon": -16.0,
     "sog": 0.0,
     "cog": 107.0,
-    "last_pos_utc": "Mar 7, 2026 06:45 UTC",
+    "last_pos_utc": "Mar 7, 2026 07:18 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -185,7 +185,7 @@
     "destination_port": "LAS PALMAS",
     "destination_distance_nm": 131.50754829735044,
     "eta_hours": 16.23549978979635,
-    "eta_utc": "2026-03-07 23:20:15 UTC",
+    "eta_utc": "2026-03-08 00:04:17 UTC",
     "eta_text": "16h 14m"
   }
 }
