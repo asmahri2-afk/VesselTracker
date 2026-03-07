@@ -143,6 +143,17 @@
     "gross_tonnage": "41589",
     "year_of_build": "2004"
   },
+  "9282041": {
+    "imo": "9282041",
+    "name": "KAVIZ",
+    "flag": "Comoros",
+    "ship_type": "Crude Oil Tanker",
+    "length_overall_m": "249.90",
+    "beam_m": "43.80",
+    "deadweight_t": "115392",
+    "gross_tonnage": "62929",
+    "year_of_build": "2004"
+  },
   "9297204": {
     "deadweight_t": "7108",
     "gross_tonnage": "4745",
