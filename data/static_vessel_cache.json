@@ -288,6 +288,17 @@
     "gross_tonnage": "4580",
     "year_of_build": "2010"
   },
+  "9411953": {
+    "imo": "9411953",
+    "name": "BALTIC LOYALTY",
+    "flag": "Liberia",
+    "ship_type": "Crude Oil Tanker",
+    "length_overall_m": "333.13",
+    "beam_m": "60.05",
+    "deadweight_t": "317441",
+    "gross_tonnage": "160135",
+    "year_of_build": "2010"
+  },
   "9415650": {
     "imo": "9415650",
     "name": "AQUAMARINE PROGRESS",
