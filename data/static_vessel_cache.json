@@ -154,6 +154,17 @@
     "gross_tonnage": "62929",
     "year_of_build": "2004"
   },
+  "9294240": {
+    "imo": "9294240",
+    "name": "GALE",
+    "flag": "Gambia",
+    "ship_type": "Crude Oil Tanker",
+    "length_overall_m": "333.00",
+    "beam_m": "60.00",
+    "deadweight_t": "311620",
+    "gross_tonnage": "160533",
+    "year_of_build": "2005"
+  },
   "9297204": {
     "deadweight_t": "7108",
     "gross_tonnage": "4745",
