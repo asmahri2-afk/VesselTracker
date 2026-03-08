@@ -625,15 +625,16 @@
     "flag": "Morocco"
   },
   "9952610": {
-    "imo": "9952610",
-    "name": "MARINA M",
-    "flag": "Malta",
-    "ship_type": "Chemical/Oil Products Tanker",
-    "length_overall_m": "183.00",
-    "beam_m": "32.23",
     "deadweight_t": "49842",
     "gross_tonnage": "29472",
-    "year_of_build": "2022"
+    "year_of_build": "2022",
+    "length_overall_m": "183.00",
+    "beam_m": "32.23",
+    "draught_m": "11.5 m",
+    "predicted_eta": null,
+    "name": "MARINA M",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "flag": "Malta"
   },
   "9983865": {
     "imo": "9983865",
