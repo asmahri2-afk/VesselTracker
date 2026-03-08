@@ -601,15 +601,16 @@
     "year_of_build": "2019"
   },
   "9841421": {
-    "imo": "9841421",
-    "name": "DING HENG 23",
-    "flag": "Hong Kong",
-    "ship_type": "Chemical/Oil Products Tanker",
-    "length_overall_m": "120.00",
-    "beam_m": "19.00",
     "deadweight_t": "9014",
     "gross_tonnage": "6205",
-    "year_of_build": "2024"
+    "year_of_build": "2024",
+    "length_overall_m": "120.00",
+    "beam_m": "19.00",
+    "draught_m": "6.0 m",
+    "predicted_eta": null,
+    "name": "DING HENG 23",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "flag": "Hong Kong"
   },
   "9933913": {
     "deadweight_t": "9137",
