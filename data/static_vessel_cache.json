@@ -243,6 +243,17 @@
     "gross_tonnage": "30681",
     "year_of_build": "2006"
   },
+  "9330020": {
+    "imo": "9330020",
+    "name": "SKYLIGHT",
+    "flag": "Palau",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "116.50",
+    "beam_m": "20.03",
+    "deadweight_t": "11262",
+    "gross_tonnage": "7687",
+    "year_of_build": "2006"
+  },
   "9337987": {
     "imo": "9337987",
     "name": "AL GHARIYA",
