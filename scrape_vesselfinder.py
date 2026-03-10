@@ -63,6 +63,9 @@ CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"
 # FIX #9: RENDER_BASE from env var, hardcoded value as fallback
 RENDER_BASE = os.getenv("RENDER_BASE", "https://vessel-api-s85s.onrender.com")
 
+# Must match API_SECRET set on Render. Leave unset (or blank) if auth is disabled.
+API_SECRET = os.getenv("API_SECRET", "")
+
 # =============================================================================
 # TRACKING THRESHOLDS
 # =============================================================================
@@ -278,9 +281,12 @@ def nearest_port(lat: float, lon: float, ports: Dict[str, Dict]) -> Tuple[Option
 # =============================================================================
 
 def fetch_with_retry(url: str) -> Optional[Dict]:
+    headers: Dict[str, str] = {"User-Agent": "VesselTracker/1.0"}
+    if API_SECRET:
+        headers["X-API-Secret"] = API_SECRET
     for attempt in range(API_MAX_RETRIES):
         try:
-            r = requests.get(url, headers={"User-Agent": "VesselTracker/1.0"}, timeout=30)
+            r = requests.get(url, headers=headers, timeout=30)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -297,14 +303,14 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
         result["lat"] = safe_float(api_data.get("lat")) if api_data.get("lat") is not None else result.get("lat")
         result["lon"] = safe_float(api_data.get("lon")) if api_data.get("lon") is not None else result.get("lon")
         result["sog"] = safe_float(api_data.get("sog"), 0.0)
-        result["cog"] = safe_float(api_data.get("cog"), 0.0)
+        result["cog"] = safe_float(api_data.get("cog"))
         result["last_pos_utc"] = api_data.get("last_pos_utc")
         result["destination"] = (api_data.get("destination") or "").strip()
         result["name"] = (api_data.get("vessel_name") or api_data.get("name") or result.get("name") or f"IMO {imo}").strip()
         result["ship_type"] = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
         result["flag"] = (api_data.get("flag") or result.get("flag") or "").strip()
 
-        static_keys = ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m", "draught_m", "predicted_eta"]
+        static_keys = ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m", "draught_m"]
         for key in static_keys:
             if api_data.get(key) is not None:
                 result[key] = api_data[key]
