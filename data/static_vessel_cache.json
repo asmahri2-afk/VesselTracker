@@ -649,6 +649,17 @@
     "ship_type": "Oil Products Tanker",
     "flag": "Morocco"
   },
+  "9938353": {
+    "imo": "9938353",
+    "name": "PRESIDENT BUSH",
+    "flag": "United States (USA)",
+    "ship_type": "Container Ship",
+    "length_overall_m": "255.00",
+    "beam_m": "40.00",
+    "deadweight_t": "72980",
+    "gross_tonnage": "59052",
+    "year_of_build": "2024"
+  },
   "9952610": {
     "deadweight_t": "49842",
     "gross_tonnage": "29472",
