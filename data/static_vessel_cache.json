@@ -116,7 +116,6 @@
     "length_overall_m": "100.58",
     "beam_m": "18.80",
     "draught_m": "6.7 m",
-    "predicted_eta": null,
     "name": "STORM I",
     "ship_type": "General Cargo Ship",
     "flag": "Panama"
@@ -172,7 +171,6 @@
     "length_overall_m": "119.10",
     "beam_m": "16.90",
     "draught_m": "5.0 m",
-    "predicted_eta": null,
     "name": "DENSA DEFNE",
     "ship_type": "Chemical/Oil Products Tanker",
     "flag": "Malta"
@@ -283,7 +281,6 @@
     "length_overall_m": "99.98",
     "beam_m": "17.20",
     "draught_m": "5.8 m",
-    "predicted_eta": null,
     "name": "CGAS MARGRETHE",
     "ship_type": "LPG Tanker",
     "flag": "Malta"
@@ -350,7 +347,6 @@
     "length_overall_m": "119.81",
     "beam_m": "20.53",
     "draught_m": "6.1 m",
-    "predicted_eta": null,
     "name": "BBC GREENLAND",
     "ship_type": "General Cargo Ship",
     "flag": "Antigua & Barbuda"
@@ -373,7 +369,6 @@
     "length_overall_m": "99.89",
     "beam_m": "16.60",
     "draught_m": "4.1 m",
-    "predicted_eta": null,
     "name": "CKR ZEYNEP",
     "ship_type": "General Cargo Ship",
     "flag": "San Marino"
@@ -440,7 +435,6 @@
     "length_overall_m": "128.97",
     "beam_m": "16.71",
     "draught_m": "4.7 m",
-    "predicted_eta": null,
     "name": "BBC BELEM",
     "ship_type": "General Cargo Ship",
     "flag": "Antigua & Barbuda"
@@ -618,7 +612,6 @@
     "length_overall_m": "120.00",
     "beam_m": "19.00",
     "draught_m": "6.0 m",
-    "predicted_eta": null,
     "name": "DING HENG 23",
     "ship_type": "Chemical/Oil Products Tanker",
     "flag": "Hong Kong"
@@ -630,7 +623,6 @@
     "length_overall_m": "117.53",
     "beam_m": "19.50",
     "draught_m": "5.3 m",
-    "predicted_eta": null,
     "name": "CHALLAH",
     "ship_type": "Oil Products Tanker",
     "flag": "Morocco"
