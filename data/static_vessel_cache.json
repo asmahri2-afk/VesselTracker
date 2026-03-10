@@ -219,6 +219,17 @@
     "gross_tonnage": "30936",
     "year_of_build": "2006"
   },
+  "9315795": {
+    "imo": "9315795",
+    "name": "ANDROMEDA",
+    "flag": "Greece",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "182.55",
+    "beam_m": "27.39",
+    "deadweight_t": "39378",
+    "gross_tonnage": "23356",
+    "year_of_build": "2007"
+  },
   "9321483": {
     "imo": "9321483",
     "name": "EMMA MAERSK",
