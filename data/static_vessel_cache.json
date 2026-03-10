@@ -483,6 +483,17 @@
     "gross_tonnage": "5633",
     "year_of_build": "2021"
   },
+  "9566708": {
+    "imo": "9566708",
+    "name": "AA-D",
+    "flag": "Malta",
+    "ship_type": "Chemical/Oil Products Tanker",
+    "length_overall_m": "109.92",
+    "beam_m": "17.20",
+    "deadweight_t": "7081",
+    "gross_tonnage": "4812",
+    "year_of_build": "2012"
+  },
   "9593505": {
     "imo": "9593505",
     "name": "PIONEERING SPIRIT",
