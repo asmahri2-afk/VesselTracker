@@ -2,8 +2,8 @@ name: Update Sanctions List
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # runs daily at 03:00 UTC
-  workflow_dispatch:        # allow manual trigger from GitHub UI
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   update:
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Fetch & parse sanctions (OpenSanctions + OFAC direct)
         run: |
@@ -33,7 +33,6 @@ jobs:
               if lst not in entries[imo]["lists"]:
                   entries[imo]["lists"].append(lst)
 
-          # Dataset name -> friendly label (substring match on full names, tab-separated)
           DATASET_MAP = [
               ("US OFAC",        "OFAC"),
               ("EU ",            "EU"),
@@ -57,7 +56,6 @@ jobs:
           def datasets_to_lists(datasets_str):
               matched = set()
               result = []
-              # Separator can be tab or semicolon
               for ds in re.split(r'[\t;]+', datasets_str):
                   ds = ds.strip()
                   if not ds:
@@ -69,7 +67,6 @@ jobs:
                           break
               return result or ["Sanctions"]
 
-          # SOURCE 1: OpenSanctions consolidated CSV
           print("Fetching OpenSanctions CSV...", flush=True)
           try:
               req = urllib.request.Request(
@@ -80,7 +77,6 @@ jobs:
                   raw = r.read().decode("utf-8")
 
               reader = csv.DictReader(io.StringIO(raw))
-              # Print headers for debugging
               fieldnames = reader.fieldnames or []
               print(f"  CSV columns: {fieldnames}", flush=True)
 
@@ -90,7 +86,6 @@ jobs:
                   if not any(s in schema.lower() for s in ("vessel", "ship")):
                       continue
 
-                  # IMO is in 'identifiers' column e.g. "imo:1234567;mmsi:123456789"
                   imo_val = ""
                   identifiers = row.get("identifiers", "") or ""
                   m = re.search(r'imo:(\d{7})', identifiers, re.I)
@@ -112,7 +107,6 @@ jobs:
                       continue
 
                   name = (row.get("name") or "").split(";")[0].strip()
-                  # 'dataset' column e.g. "us_ofac_sdn" or "eu_fsf;gb_hmt"
                   lists = datasets_to_lists(row.get("dataset", ""))
                   for lst in lists:
                       add(imo_val, name, lst)
@@ -123,7 +117,6 @@ jobs:
           except Exception as ex:
               print(f"  OpenSanctions failed: {ex}", flush=True)
 
-          # SOURCE 2: OFAC SDN XML (direct, authoritative)
           print("Fetching OFAC SDN XML...", flush=True)
           before = len(entries)
           try:
@@ -155,7 +148,6 @@ jobs:
           except Exception as ex:
               print(f"  OFAC direct failed: {ex}", flush=True)
 
-          # Write output
           import os
           os.makedirs("data", exist_ok=True)
           output = {
