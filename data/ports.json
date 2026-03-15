@@ -7823,6 +7823,12 @@
     "anchorage_depth": 23.2,
     "cargo_pier_depth": 18.6
   },
+  "santa cruz de tenerife": {
+    "lat": 28.4636,
+    "lon": -16.2518,
+    "anchorage_depth": 23.2,
+    "cargo_pier_depth": 18.6
+  },
   "CHINAE": {
     "lat": 35.133333,
     "lon": 128.65,
