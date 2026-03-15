@@ -379,7 +379,7 @@
     "year_of_build": "2010",
     "length_overall_m": "99.89",
     "beam_m": "16.60",
-    "draught_m": "6.1 m",
+    "draught_m": "-",
     "name": "CKR ZEYNEP",
     "ship_type": "General Cargo Ship",
     "flag": "San Marino"
@@ -644,7 +644,7 @@
     "year_of_build": "2022",
     "length_overall_m": "117.53",
     "beam_m": "19.50",
-    "draught_m": "5.3 m",
+    "draught_m": "6.1 m",
     "name": "CHALLAH",
     "ship_type": "Oil Products Tanker",
     "flag": "Morocco"
