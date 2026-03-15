@@ -1,5 +1,4 @@
 name: Update vessels data
-
 on:
   push:
     paths:
@@ -7,7 +6,6 @@ on:
   schedule:
     - cron: "30 5-22 * * *"
   workflow_dispatch:
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -15,16 +13,13 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v4.2.2
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: pip install -r requirements.txt
-
       - name: Run scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
@@ -32,15 +27,11 @@ jobs:
           RENDER_BASE: ${{ secrets.RENDER_BASE }}
           API_SECRET: ${{ secrets.API_SECRET }}
         run: python scrape_vesselfinder.py
-
       - name: Commit & push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Stage all data files that may have changed
           git add data/vessels_data.json data/static_vessel_cache.json data/failure_counts.json || true
-
           if [[ -n "$(git status --porcelain)" ]]; then
             git commit -m "Update vessels data #${{ github.run_number }}"
             git pull --rebase -X theirs origin main
