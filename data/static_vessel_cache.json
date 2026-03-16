@@ -379,7 +379,7 @@
     "year_of_build": "2010",
     "length_overall_m": "99.89",
     "beam_m": "16.60",
-    "draught_m": "-",
+    "draught_m": "6.1 m",
     "name": "CKR ZEYNEP",
     "ship_type": "General Cargo Ship",
     "flag": "San Marino"
@@ -451,15 +451,15 @@
     "flag": "Antigua & Barbuda"
   },
   "9508639": {
-    "imo": "9508639",
-    "name": "RIX ONYX",
-    "flag": "Cyprus",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "89.95",
-    "beam_m": "15.40",
     "deadweight_t": "4742",
     "gross_tonnage": "3556",
-    "year_of_build": "2010"
+    "year_of_build": "2010",
+    "length_overall_m": "89.95",
+    "beam_m": "15.40",
+    "draught_m": "6.0 m",
+    "name": "RIX ONYX",
+    "ship_type": "General Cargo Ship",
+    "flag": "Cyprus"
   },
   "9518880": {
     "imo": "9518880",
