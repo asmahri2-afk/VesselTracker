@@ -6,7 +6,7 @@
     "lon": -16.0,
     "sog": 0.0,
     "cog": 258.0,
-    "last_pos_utc": "Mar 26, 2026 15:36 UTC",
+    "last_pos_utc": "Mar 26, 2026 17:12 UTC",
     "destination": "Laayoune (El Aaiun), Morocco",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -16,7 +16,7 @@
     "year_of_build": "2007",
     "length_overall_m": "119.81",
     "beam_m": "20.53",
-    "draught_m": "6.1 m",
+    "draught_m": "6.9 m",
     "last_alert_utc": "2026-03-26T15:51:51.081567+00:00",
     "nearest_port": "GRANADILLA",
     "nearest_distance_nm": 26.408655075539023,
@@ -29,11 +29,11 @@
   "9437854": {
     "imo": "9437854",
     "name": "CKR ZEYNEP",
-    "lat": 28.0,
-    "lon": -14.0,
-    "sog": 9.0,
-    "cog": 13.8,
-    "last_pos_utc": "Mar 26, 2026 15:51 UTC",
+    "lat": 28.5008,
+    "lon": -13.76229,
+    "sog": 9.3,
+    "cog": 13.2,
+    "last_pos_utc": "Mar 26, 2026 17:35 UTC",
     "destination": "Arrecife, Spain",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -44,14 +44,14 @@
     "length_overall_m": "99.89",
     "beam_m": "16.60",
     "draught_m": "6.1 m",
-    "last_alert_utc": "2026-03-26T11:27:46.593972+00:00",
-    "nearest_port": "FUERTEVENTURA",
-    "nearest_distance_nm": 18.79143866733672,
+    "last_alert_utc": "2026-03-26T17:35:28.527419+00:00",
+    "nearest_port": "PUERTO DEL ROSARIO",
+    "nearest_distance_nm": 5.261303587324383,
     "destination_port": "ARRECIFE",
-    "destination_distance_nm": 62.566219852234944,
-    "eta_hours": 6.951802205803883,
-    "eta_utc": "2026-03-26 22:49:00 UTC",
-    "eta_text": "6h 57m"
+    "destination_distance_nm": 29.976231306238837,
+    "eta_hours": 3.2232506780901975,
+    "eta_utc": "2026-03-26 20:48:52 UTC",
+    "eta_text": "3h 13m"
   },
   "9501655": {
     "imo": "9501655",
@@ -130,8 +130,8 @@
     "nearest_distance_nm": 96.59408843678307,
     "destination_port": "CARTAGENA",
     "destination_distance_nm": 713.4582981286434,
-    "eta_hours": 64.27552235393183,
-    "eta_utc": "2026-03-29 08:08:30 UTC",
-    "eta_text": "2d 16h"
+    "eta_hours": null,
+    "eta_utc": null,
+    "eta_text": null
   }
 }
