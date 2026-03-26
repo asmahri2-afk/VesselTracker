@@ -6,9 +6,9 @@
     "lon": -16.0,
     "sog": 0.0,
     "cog": 258.0,
-    "last_pos_utc": "Mar 26, 2026 14:00 UTC",
-    "destination": "Puerto de Granadilla, Spain",
-    "done": true,
+    "last_pos_utc": "Mar 26, 2026 15:36 UTC",
+    "destination": "Laayoune (El Aaiun), Morocco",
+    "done": false,
     "ship_type": "General Cargo Ship",
     "flag": "Antigua & Barbuda",
     "deadweight_t": "7536",
@@ -17,11 +17,11 @@
     "length_overall_m": "119.81",
     "beam_m": "20.53",
     "draught_m": "6.1 m",
-    "last_alert_utc": "2026-03-24T11:26:33.714138+00:00",
+    "last_alert_utc": "2026-03-26T15:51:51.081567+00:00",
     "nearest_port": "GRANADILLA",
     "nearest_distance_nm": 26.408655075539023,
-    "destination_port": "GRANADILLA",
-    "destination_distance_nm": 26.408655075539023,
+    "destination_port": "LAAYOUNE",
+    "destination_distance_nm": 146.04087723728216,
     "eta_hours": null,
     "eta_utc": null,
     "eta_text": null
@@ -31,9 +31,9 @@
     "name": "CKR ZEYNEP",
     "lat": 28.0,
     "lon": -14.0,
-    "sog": 9.3,
-    "cog": 348.0,
-    "last_pos_utc": "Mar 26, 2026 14:02 UTC",
+    "sog": 9.0,
+    "cog": 13.8,
+    "last_pos_utc": "Mar 26, 2026 15:51 UTC",
     "destination": "Arrecife, Spain",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -49,9 +49,9 @@
     "nearest_distance_nm": 18.79143866733672,
     "destination_port": "ARRECIFE",
     "destination_distance_nm": 62.566219852234944,
-    "eta_hours": 6.727550521745693,
-    "eta_utc": "2026-03-26 20:50:52 UTC",
-    "eta_text": "6h 44m"
+    "eta_hours": 6.951802205803883,
+    "eta_utc": "2026-03-26 22:49:00 UTC",
+    "eta_text": "6h 57m"
   },
   "9501655": {
     "imo": "9501655",
@@ -131,7 +131,7 @@
     "destination_port": "CARTAGENA",
     "destination_distance_nm": 713.4582981286434,
     "eta_hours": 64.27552235393183,
-    "eta_utc": "2026-03-29 06:23:49 UTC",
+    "eta_utc": "2026-03-29 08:08:30 UTC",
     "eta_text": "2d 16h"
   }
 }
