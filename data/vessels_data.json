@@ -6,7 +6,7 @@
     "lon": -16.05604,
     "sog": 12.6,
     "cog": 120.7,
-    "last_pos_utc": "Mar 26, 2026 21:51 UTC",
+    "last_pos_utc": "Mar 26, 2026 22:53 UTC",
     "destination": "Laayoune (El Aaiun), Morocco",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -23,7 +23,7 @@
     "destination_port": "LAAYOUNE",
     "destination_distance_nm": 145.2552491313738,
     "eta_hours": 11.528194375505858,
-    "eta_utc": "2026-03-27 09:24:55 UTC",
+    "eta_utc": "2026-03-27 10:28:51 UTC",
     "eta_text": "11h 32m"
   },
   "9437854": {
@@ -33,7 +33,7 @@
     "lon": -13.76229,
     "sog": 9.3,
     "cog": 13.2,
-    "last_pos_utc": "Mar 26, 2026 21:51 UTC",
+    "last_pos_utc": "Mar 26, 2026 22:54 UTC",
     "destination": "Arrecife, Spain",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -50,7 +50,7 @@
     "destination_port": "ARRECIFE",
     "destination_distance_nm": 29.976231306238837,
     "eta_hours": 3.2232506780901975,
-    "eta_utc": "2026-03-27 01:06:39 UTC",
+    "eta_utc": "2026-03-27 02:10:35 UTC",
     "eta_text": "3h 13m"
   },
   "9501655": {
