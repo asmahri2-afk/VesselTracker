@@ -33,7 +33,7 @@
     "lon": -14.0,
     "sog": 0.0,
     "cog": 248.7,
-    "last_pos_utc": "Mar 27, 2026 19:57 UTC",
+    "last_pos_utc": "Mar 27, 2026 21:03 UTC",
     "destination": "Arrecife, Spain",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -87,7 +87,7 @@
     "lon": -10.0,
     "sog": 0.0,
     "cog": 69.9,
-    "last_pos_utc": "Mar 27, 2026 19:58 UTC",
+    "last_pos_utc": "Mar 27, 2026 20:49 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -112,9 +112,9 @@
     "name": "CHALLAH",
     "lat": 35.0,
     "lon": -7.0,
-    "sog": 11.8,
-    "cog": 40.0,
-    "last_pos_utc": "Mar 27, 2026 19:54 UTC",
+    "sog": 11.4,
+    "cog": 46.0,
+    "last_pos_utc": "Mar 27, 2026 21:02 UTC",
     "destination": "Cartagena, Spain",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -130,8 +130,8 @@
     "nearest_distance_nm": 48.54378686787177,
     "destination_port": "CARTAGENA",
     "destination_distance_nm": 330.2623433983601,
-    "eta_hours": 27.9883341863017,
-    "eta_utc": "2026-03-28 23:58:29 UTC",
-    "eta_text": "1d 3h"
+    "eta_hours": 28.970380999856147,
+    "eta_utc": "2026-03-29 02:03:29 UTC",
+    "eta_text": "1d 4h"
   }
 }
