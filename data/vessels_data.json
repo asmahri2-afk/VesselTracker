@@ -33,7 +33,7 @@
     "lon": -13.76229,
     "sog": 9.3,
     "cog": 13.2,
-    "last_pos_utc": "Mar 27, 2026 13:48 UTC",
+    "last_pos_utc": "Mar 27, 2026 15:24 UTC",
     "destination": "Arrecife, Spain",
     "done": false,
     "ship_type": "General Cargo Ship",
@@ -50,7 +50,7 @@
     "destination_port": "ARRECIFE",
     "destination_distance_nm": 29.976231306238837,
     "eta_hours": 3.2232506780901975,
-    "eta_utc": "2026-03-27 17:03:02 UTC",
+    "eta_utc": "2026-03-27 18:39:59 UTC",
     "eta_text": "3h 13m"
   },
   "9501655": {
@@ -87,7 +87,7 @@
     "lon": -10.0,
     "sog": 0.0,
     "cog": 69.9,
-    "last_pos_utc": "Mar 27, 2026 13:46 UTC",
+    "last_pos_utc": "Mar 27, 2026 15:22 UTC",
     "destination": "",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -110,11 +110,11 @@
   "9933913": {
     "imo": "9933913",
     "name": "CHALLAH",
-    "lat": 34.0,
+    "lat": 35.0,
     "lon": -8.0,
-    "sog": 11.7,
-    "cog": 43.0,
-    "last_pos_utc": "Mar 27, 2026 13:39 UTC",
+    "sog": 12.0,
+    "cog": 47.0,
+    "last_pos_utc": "Mar 27, 2026 15:25 UTC",
     "destination": "Cartagena, Spain",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -125,13 +125,13 @@
     "length_overall_m": "117.53",
     "beam_m": "19.50",
     "draught_m": "5.3 m",
-    "last_alert_utc": "2026-03-27T11:13:37.384678+00:00",
-    "nearest_port": "CASABLANCA",
-    "nearest_distance_nm": 27.757245608660828,
+    "last_alert_utc": "2026-03-27T15:26:40.014609+00:00",
+    "nearest_port": "KENITRA",
+    "nearest_distance_nm": 81.17266458505016,
     "destination_port": "CARTAGENA",
-    "destination_distance_nm": 404.144213137727,
-    "eta_hours": 34.54224043912197,
-    "eta_utc": "2026-03-29 00:22:15 UTC",
-    "eta_text": "1d 10h"
+    "destination_distance_nm": 373.56989362346263,
+    "eta_hours": 31.130824468621885,
+    "eta_utc": "2026-03-28 22:34:30 UTC",
+    "eta_text": "1d 7h"
   }
 }
