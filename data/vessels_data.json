@@ -31,9 +31,9 @@
     "name": "CKR ZEYNEP",
     "lat": 29.0,
     "lon": -14.0,
-    "sog": 0.0,
-    "cog": 204.3,
-    "last_pos_utc": "Mar 30, 2026 17:27 UTC",
+    "sog": 0.1,
+    "cog": 195.5,
+    "last_pos_utc": "Mar 30, 2026 18:33 UTC",
     "destination": "Arrecife, Spain",
     "done": true,
     "ship_type": "General Cargo Ship",
@@ -85,9 +85,9 @@
     "name": "CHALLAH",
     "lat": 36.0,
     "lon": -4.0,
-    "sog": 12.9,
-    "cog": 257.4,
-    "last_pos_utc": "Mar 30, 2026 17:29 UTC",
+    "sog": 13.2,
+    "cog": 262.0,
+    "last_pos_utc": "Mar 30, 2026 18:33 UTC",
     "destination": "Dakhla, Morocco",
     "done": false,
     "ship_type": "Oil Products Tanker",
@@ -103,8 +103,8 @@
     "nearest_distance_nm": 45.21363522044397,
     "destination_port": "DAKHLA",
     "destination_distance_nm": 965.9365300679144,
-    "eta_hours": 74.87880078045848,
-    "eta_utc": "2026-04-02 20:22:15 UTC",
-    "eta_text": "3d 2h"
+    "eta_hours": 73.17700985362988,
+    "eta_utc": "2026-04-02 19:44:34 UTC",
+    "eta_text": "3d 1h"
   }
 }
