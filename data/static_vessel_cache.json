@@ -506,15 +506,15 @@
     "flag": "Malta"
   },
   "9573634": {
-    "imo": "9573634",
-    "name": "ATLANTIC",
-    "flag": "Netherlands",
-    "ship_type": "General Cargo Ship",
-    "length_overall_m": "104.59",
-    "beam_m": "15.60",
     "deadweight_t": "3394",
     "gross_tonnage": "2981",
-    "year_of_build": "2011"
+    "year_of_build": "2011",
+    "length_overall_m": "104.59",
+    "beam_m": "15.60",
+    "draught_m": "-",
+    "name": "ATLANTIC",
+    "ship_type": "General Cargo Ship",
+    "flag": "Netherlands"
   },
   "9593505": {
     "imo": "9593505",
