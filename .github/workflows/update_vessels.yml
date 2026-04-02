@@ -29,13 +29,14 @@ jobs:
           pip install -r requirements.txt
           pip install requests supabase
 
-      - name: Run scraper
-        env:
-          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
-          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
-          RENDER_BASE: ${{ secrets.RENDER_BASE }}
-          API_SECRET: ${{ secrets.API_SECRET }}
-        run: python scrape_vesselfinder.py
+- name: Run scraper
+  env:
+    CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+    CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+    RENDER_BASE: ${{ secrets.RENDER_BASE }}
+    API_SECRET: ${{ secrets.API_SECRET }}
+    SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}   # ← ADD THIS
+  run: python scrape_vesselfinder.py
 
       - name: Commit & push changes
         run: |
