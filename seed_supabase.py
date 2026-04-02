@@ -1,7 +1,8 @@
 """
 seed_supabase.py
-Run by GitHub Actions to import all JSON data into Supabase.
-Place this file in the ROOT of your repo.
+────────────────
+STEP 3 — Import all JSON data into Supabase.
+Place in ROOT of your repo and run via GitHub Actions.
 """
 
 import json, os
@@ -23,32 +24,32 @@ def upsert(table, rows):
         sb.table(table).upsert(batch).execute()
         print(f"  {min(i+CHUNK, len(rows))}/{len(rows)} rows inserted")
 
-# 1. Ports
+# ── 1. Ports ───────────────────────────────────────────────────────────────────
 print("\n📍 Seeding ports...")
 ports_raw = json.loads(Path("data/ports.json").read_text())
 rows = [{"name": k, "lat": v["lat"], "lon": v["lon"]} for k, v in ports_raw.items()]
 upsert("ports", rows)
 print(f"✅ {len(rows)} ports done.")
 
-# 2. Tracked IMOs
+# ── 2. Tracked IMOs ────────────────────────────────────────────────────────────
 print("\n🎯 Seeding tracked_imos...")
 imos = json.loads(Path("data/tracked_imos.json").read_text())
 rows = [{"imo": str(i)} for i in imos]
 upsert("tracked_imos", rows)
 print(f"✅ {len(rows)} tracked IMOs done.")
 
-# 3. Vessels
+# ── 3. Vessels — keep ALL fields from vessels_data.json ────────────────────────
 print("\n🚢 Seeding vessels...")
 vessels_raw = json.loads(Path("data/vessels_data.json").read_text())
 rows = []
 for v in vessels_raw.values():
     row = dict(v)
-    row.pop("updated_at", None)
+    row.pop("updated_at", None)  # let Supabase set this automatically
     rows.append(row)
 upsert("vessels", rows)
 print(f"✅ {len(rows)} vessels done.")
 
-# 4. Static vessel cache
+# ── 4. Static vessel cache ─────────────────────────────────────────────────────
 print("\n🗄️  Seeding static_vessel_cache...")
 cache_raw = json.loads(Path("data/static_vessel_cache.json").read_text())
 rows = []
@@ -68,21 +69,21 @@ for imo, v in cache_raw.items():
 upsert("static_vessel_cache", rows)
 print(f"✅ {len(rows)} cached vessels done.")
 
-# 5. Ship ID map
+# ── 5. Ship ID map ─────────────────────────────────────────────────────────────
 print("\n🔢 Seeding shipid_map...")
 sm = json.loads(Path("data/shipid_map.json").read_text())
 rows = [{"imo": k, "shipid": v} for k, v in sm.items()]
 upsert("shipid_map", rows)
 print(f"✅ {len(rows)} ship IDs done.")
 
-# 6. Failure counts
+# ── 6. Failure counts ──────────────────────────────────────────────────────────
 print("\n⚠️  Seeding failure_counts...")
 fc = json.loads(Path("data/failure_counts.json").read_text())
 rows = [{"imo": k, "count": v} for k, v in fc.items()]
 upsert("failure_counts", rows)
 print(f"✅ {len(rows)} done.")
 
-# 7. Sanctioned IMOs
+# ── 7. Sanctioned IMOs ─────────────────────────────────────────────────────────
 print("\n🚨 Seeding sanctioned_imos...")
 sanc_raw = json.loads(Path("data/sanctioned_imos.json").read_text())
 entries  = sanc_raw.get("entries", [])
@@ -98,4 +99,4 @@ rows = [
 upsert("sanctioned_imos", rows)
 print(f"✅ {len(rows)} sanctioned vessels done.")
 
-print("\n🎉 All data imported into Supabase successfully!")
+print("\n🎉 All done! Check Supabase → Table Editor to verify.")
