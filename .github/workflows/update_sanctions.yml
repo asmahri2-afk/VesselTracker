@@ -15,10 +15,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4.2.2
 
-      - name: Fetch & parse sanctions (OpenSanctions + OFAC direct)
+      - name: Fetch, Parse & Sync Sanctions
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           python3 - << 'PYEOF'
-          import urllib.request, csv, json, re, io, xml.etree.ElementTree as ET
+          import urllib.request, csv, json, re, io, os, xml.etree.ElementTree as ET
           from datetime import datetime, timezone
           from collections import Counter
 
@@ -58,8 +61,7 @@ jobs:
               result = []
               for ds in re.split(r'[\t;]+', datasets_str):
                   ds = ds.strip()
-                  if not ds:
-                      continue
+                  if not ds: continue
                   for substring, label in DATASET_MAP:
                       if substring.lower() in ds.lower() and label not in matched:
                           result.append(label)
@@ -67,6 +69,7 @@ jobs:
                           break
               return result or ["Sanctions"]
 
+          # 1. Fetch OpenSanctions
           print("Fetching OpenSanctions CSV...", flush=True)
           try:
               req = urllib.request.Request(
@@ -75,22 +78,14 @@ jobs:
               )
               with urllib.request.urlopen(req, timeout=120) as r:
                   raw = r.read().decode("utf-8")
-
               reader = csv.DictReader(io.StringIO(raw))
-              fieldnames = reader.fieldnames or []
-              print(f"  CSV columns: {fieldnames}", flush=True)
-
-              os_count = 0
               for row in reader:
                   schema = row.get("schema", "")
-                  if not any(s in schema.lower() for s in ("vessel", "ship")):
-                      continue
-
+                  if not any(s in schema.lower() for s in ("vessel", "ship")): continue
                   imo_val = ""
                   identifiers = row.get("identifiers", "") or ""
                   m = re.search(r'imo:(\d{7})', identifiers, re.I)
-                  if m:
-                      imo_val = m.group(1)
+                  if m: imo_val = m.group(1)
                   if not imo_val:
                       for part in re.split(r'[;,\s]+', identifiers):
                           digits = re.sub(r'\D', '', part)
@@ -103,22 +98,16 @@ jobs:
                           if m2:
                               imo_val = m2.group(1)
                               break
-                  if not imo_val:
-                      continue
-
+                  if not imo_val: continue
                   name = (row.get("name") or "").split(";")[0].strip()
                   lists = datasets_to_lists(row.get("dataset", ""))
                   for lst in lists:
                       add(imo_val, name, lst)
-                  os_count += 1
-
-              print(f"  Vessel rows processed: {os_count} -> {len(entries)} unique IMOs", flush=True)
-
           except Exception as ex:
-              print(f"  OpenSanctions failed: {ex}", flush=True)
+              print(f"  OpenSanctions failed: {ex}")
 
+          # 2. Fetch OFAC SDN
           print("Fetching OFAC SDN XML...", flush=True)
-          before = len(entries)
           try:
               req = urllib.request.Request(
                   "https://www.treasury.gov/ofac/downloads/sdn.xml",
@@ -130,47 +119,64 @@ jobs:
               sdn_entries = root.findall(".//{*}sdnEntry") or root.findall(".//sdnEntry")
               for e in sdn_entries:
                   stype = (e.findtext("{*}sdnType") or e.findtext("sdnType") or "").strip()
-                  if stype not in ("Vessel", "Entity"):
-                      continue
+                  if stype not in ("Vessel", "Entity"): continue
                   name = (e.findtext("{*}lastName") or e.findtext("lastName") or "").strip()
                   prog = next((p.text for p in e.iter() if p.tag.endswith("program") and p.text), "SDN")
                   for id_el in e.iter():
-                      if not id_el.tag.endswith("id"):
-                          continue
+                      if not id_el.tag.endswith("id"): continue
                       id_type, id_num = "", ""
                       for child in id_el:
                           tag = child.tag.split("}")[-1]
-                          if tag == "idType":     id_type = (child.text or "").lower()
-                          elif tag == "idNumber": id_num  = child.text or ""
+                          if tag == "idType": id_type = (child.text or "").lower()
+                          elif tag == "idNumber": id_num = child.text or ""
                       if "imo" in id_type or "vessel" in id_type:
                           add(id_num, name, "OFAC", prog)
-              print(f"  OFAC direct: +{len(entries)-before} additional IMOs", flush=True)
           except Exception as ex:
-              print(f"  OFAC direct failed: {ex}", flush=True)
+              print(f"  OFAC direct failed: {ex}")
 
-          import os
+          # 3. Save Local JSON
           os.makedirs("data", exist_ok=True)
-          output = {
+          output_data = sorted(entries.values(), key=lambda x: x["imo"])
+          full_json = {
               "updated": datetime.now(timezone.utc).isoformat(),
               "total": len(entries),
-              "sources": ["OpenSanctions consolidated (OFAC, EU, UK, UN, AU, CA, CH, JP, UA)", "OFAC SDN direct"],
-              "entries": sorted(entries.values(), key=lambda x: x["imo"])
+              "entries": output_data
           }
           with open("data/sanctioned_imos.json", "w") as f:
-              json.dump(output, f, separators=(",", ":"))
+              json.dump(full_json, f, separators=(",", ":"))
+          
+          # 4. Sync to Supabase
+          print(f"Syncing {len(output_data)} vessels to Supabase...", flush=True)
+          sb_url = os.environ.get("SUPABASE_URL")
+          sb_key = os.environ.get("SUPABASE_SERVICE_KEY")
 
-          counter = Counter()
-          for e in entries.values():
-              for l in e["lists"]:
-                  counter[l] += 1
-          print(f"\n=== DONE: {len(entries)} total unique sanctioned vessel IMOs ===")
-          for lst, count in counter.most_common():
-              print(f"   {lst}: {count}")
+          if sb_url and sb_key:
+              # Payload matches SQL schema: imo (PK), name, lists (TEXT[]), program
+              req_sb = urllib.request.Request(
+                  f"{sb_url}/rest/v1/sanctioned_imos",
+                  data=json.dumps(output_data).encode("utf-8"),
+                  headers={
+                      "apikey": sb_key,
+                      "Authorization": f"Bearer {sb_key}",
+                      "Content-Type": "application/json",
+                      "Prefer": "resolution=merge-duplicates"
+                  },
+                  method="POST"
+              )
+              try:
+                  with urllib.request.urlopen(req_sb, timeout=60) as response:
+                      print(f"  Supabase sync successful: Status {response.status}")
+              except Exception as e:
+                  print(f"  Supabase sync failed: {e}")
+          else:
+              print("  Error: Supabase credentials missing in Environment Secrets.")
+
+          print(f"\n=== DONE: {len(entries)} total unique sanctioned vessels ===")
           PYEOF
 
-      - name: Commit updated sanctions data
+      - name: Commit updated sanctions JSON
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/sanctioned_imos.json
           git diff --cached --quiet && echo "No changes" || git commit -m "chore: update sanctioned_imos.json [$(date -u +%Y-%m-%d)]"
