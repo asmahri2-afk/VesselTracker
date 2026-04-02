@@ -1,4 +1,5 @@
 name: Update vessels data
+
 on:
   push:
     paths:
@@ -6,22 +7,28 @@ on:
   schedule:
     - cron: "30 5-22 * * *"
   workflow_dispatch:
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4.2.2
+
       - name: Setup Python
         uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.11"
-- name: Install dependencies
-  run: |
-    pip install -r requirements.txt
-    pip install requests supabase
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests supabase
+
       - name: Run scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
@@ -29,6 +36,7 @@ jobs:
           RENDER_BASE: ${{ secrets.RENDER_BASE }}
           API_SECRET: ${{ secrets.API_SECRET }}
         run: python scrape_vesselfinder.py
+
       - name: Commit & push changes
         run: |
           git config user.name "github-actions[bot]"
