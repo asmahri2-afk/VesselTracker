@@ -18,7 +18,7 @@ jobs:
       - name: Fetch, Parse & Sync Sanctions
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           python3 - << 'PYEOF'
           import urllib.request, csv, json, re, io, os, xml.etree.ElementTree as ET
