@@ -18,9 +18,10 @@ jobs:
         uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.11"
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        run: pip install requests supabase
+- name: Install dependencies
+  run: |
+    pip install -r requirements.txt
+    pip install requests supabase
       - name: Run scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
