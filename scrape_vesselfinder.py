@@ -543,6 +543,90 @@ def main():
 
         logger.info("Tracking run completed successfully.")
 
+        # ─────────────────────────────────────────────────────────────────────
+        # PER-USER CALLMEBOT ALERTS (multi-user support)
+        # ─────────────────────────────────────────────────────────────────────
+        logger.info("Checking per-user CallMeBot alerts...")
+
+        import urllib.parse as _urllib_parse
+
+        def _send_whatsapp_alert(phone: str, apikey: str, message: str):
+            """Send WhatsApp message via CallMeBot API for a specific user."""
+            try:
+                encoded_msg = _urllib_parse.quote(message)
+                url = f"https://api.callmebot.com/whatsapp.php?phone={_urllib_parse.quote(phone)}&text={encoded_msg}&apikey={_urllib_parse.quote(apikey)}"
+                r = requests.get(url, timeout=10)
+                logger.info(f"CallMeBot alert sent to {phone}: {r.status_code}")
+            except Exception as e:
+                logger.warning(f"CallMeBot alert failed for {phone}: {e}")
+
+        def _check_vessel_alerts(imo: str, current_data: dict, previous_data: dict) -> list:
+            """Check if vessel status changed and return alert messages."""
+            alerts = []
+            if not previous_data:
+                return alerts
+
+            prev_sog = float(previous_data.get('sog') or 0)
+            curr_sog = float(current_data.get('sog') or 0)
+            dest = (current_data.get('destination') or '').upper()
+            dest_dist = current_data.get('destination_distance_nm')
+
+            # Was moving, now stopped
+            if prev_sog > 0.5 and curr_sog <= 0.5:
+                name = current_data.get('name', f'IMO {imo}')
+                if dest_dist is not None and float(dest_dist) <= 30:
+                    alerts.append(f"⚓ {name} arrived at port near {dest or 'destination'}")
+                else:
+                    alerts.append(f"🔴 {name} has stopped (stalled)")
+
+            # Signal age check
+            last_pos = current_data.get('last_pos_utc')
+            if last_pos:
+                try:
+                    from datetime import datetime, timezone as _tz
+                    pos_time = datetime.fromisoformat(last_pos.replace(' UTC', '').replace('Z', ''))
+                    age_hours = (datetime.now(_tz.utc) - pos_time.replace(tzinfo=_tz.utc)).total_seconds() / 3600
+                    if age_hours > 6:
+                        name = current_data.get('name', f'IMO {imo}')
+                        alerts.append(f"📡 {name} signal lost — last seen {age_hours:.0f}h ago")
+                except Exception:
+                    pass
+
+            return alerts
+
+        try:
+            alert_users_res = sb.table('user_profiles')\
+                .select('id, username, callmebot_phone, callmebot_apikey')\
+                .eq('callmebot_enabled', True).execute()
+
+            for user in (alert_users_res.data or []):
+                if not user.get('callmebot_phone') or not user.get('callmebot_apikey'):
+                    continue
+
+                user_imos_res = sb.table('tracked_imos')\
+                    .select('imo')\
+                    .eq('user_id', user['id']).execute()
+
+                for row in (user_imos_res.data or []):
+                    imo = str(row['imo'])
+                    current_res = sb.table('vessels').select('*').eq('imo', imo).execute()
+                    if not current_res.data:
+                        continue
+
+                    vessel_data = current_res.data[0]
+                    user_alerts = _check_vessel_alerts(imo, vessel_data, prev_states.get(imo))
+
+                    for alert_msg in user_alerts:
+                        _send_whatsapp_alert(
+                            user['callmebot_phone'],
+                            user['callmebot_apikey'],
+                            f"🚢 VesselTracker Alert\n{alert_msg}"
+                        )
+                        time.sleep(1)
+
+        except Exception as e:
+            logger.warning(f"Per-user alert processing error: {e}")
+
     except Exception as e:
         logger.error(f"Fatal error in main: {e}", exc_info=True)
         send_whatsapp(f"🚨 Vessel Tracker CRASHED: {str(e)[:200]}")
