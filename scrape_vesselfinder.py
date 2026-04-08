@@ -271,13 +271,16 @@ def nearest_port(lat: float, lon: float, ports: Dict) -> Tuple[Optional[str], Op
 # API COMMUNICATION (unchanged)
 # =============================================================================
 
-def fetch_with_retry(url: str) -> Optional[Dict]:
+def fetch_with_retry(url: str, method: str = "GET", json_body: Dict = None) -> Optional[Dict]:
     headers: Dict[str, str] = {"User-Agent": "VesselTracker/1.0"}
     if API_SECRET:
         headers["X-API-Secret"] = API_SECRET
     for attempt in range(API_MAX_RETRIES):
         try:
-            r = requests.get(url, headers=headers, timeout=30)
+            if method == "POST":
+                r = requests.post(url, headers=headers, json=json_body, timeout=120)
+            else:
+                r = requests.get(url, headers=headers, timeout=30)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -314,6 +317,47 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
 
     result["imo"] = imo
     return result
+
+def fetch_all_vessels_batch(imos: List[str], static_cache: Dict) -> Dict[str, Dict]:
+    """Fetch all vessels in one batch request instead of N sequential calls."""
+    logger.info(f"Fetching {len(imos)} vessels via batch endpoint...")
+    response = fetch_with_retry(
+        f"{RENDER_BASE}/vessel-batch",
+        method="POST",
+        json_body={"imos": imos}
+    )
+    if not response:
+        logger.warning("Batch fetch failed — falling back to sequential")
+        return {imo: fetch_vessel_data(imo, static_cache) for imo in imos}
+
+    results = {}
+    for imo, api_data in response.get("results", {}).items():
+        result = static_cache.get(imo, {}).copy()
+        if api_data and api_data.get("found") is not False:
+            result["lat"]          = safe_float(api_data.get("lat")) if api_data.get("lat") is not None else result.get("lat")
+            result["lon"]          = safe_float(api_data.get("lon")) if api_data.get("lon") is not None else result.get("lon")
+            result["sog"]          = safe_float(api_data.get("sog"), 0.0)
+            result["cog"]          = safe_float(api_data.get("cog"))
+            result["last_pos_utc"] = api_data.get("last_pos_utc")
+            result["destination"]  = (api_data.get("destination") or "").strip()
+            result["name"]         = (api_data.get("vessel_name") or api_data.get("name") or result.get("name") or f"IMO {imo}").strip()
+            result["ship_type"]    = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
+            result["flag"]         = (api_data.get("flag") or result.get("flag") or "").strip()
+            static_keys = ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m", "draught_m"]
+            for key in static_keys:
+                result[key] = api_data.get(key) if api_data.get(key) is not None else result.get(key)
+            cache_entry = {k: result.get(k) for k in static_keys + ["name", "ship_type", "flag"]}
+            db_save_static_cache(imo, cache_entry)
+        result["imo"] = imo
+        results[imo] = result
+
+    # Log errors
+    for imo, err in response.get("errors", {}).items():
+        logger.warning(f"Batch error for IMO {imo}: {err}")
+        results[imo] = static_cache.get(imo, {"imo": imo})
+
+    logger.info(f"Batch complete: {response.get('success', 0)} ok, {response.get('failed', 0)} failed")
+    return results
 
 # =============================================================================
 # CORE LOGIC (unchanged)
@@ -506,18 +550,22 @@ def main():
 
         logger.info(f"Tracking {len(imos)} vessels | {len(ports)} ports loaded")
 
-        for imo in imos:
-            imo = str(imo).strip()
-            if not validate_imo(imo):
-                logger.warning(f"Invalid IMO skipped: {imo}")
-                continue
+        # Filter out invalid and max-failed IMOs before batch fetch
+        valid_imos = [
+            str(imo).strip() for imo in imos
+            if validate_imo(str(imo).strip())
+            and failure_counts.get(str(imo).strip(), 0) < MAX_IMO_FAILURES
+        ]
+        skipped = len(imos) - len(valid_imos)
+        if skipped:
+            logger.warning(f"{skipped} IMO(s) skipped (invalid or max failures reached)")
 
-            fails = failure_counts.get(imo, 0)
-            if fails >= MAX_IMO_FAILURES:
-                logger.warning(f"IMO {imo} skipped after {fails} consecutive failures.")
-                continue
+        # Fetch all vessels in one batch request instead of N sequential calls
+        all_vessel_data = fetch_all_vessels_batch(valid_imos, static_cache)
 
-            v_data = fetch_vessel_data(imo, static_cache)
+        for imo in valid_imos:
+            v_data = all_vessel_data.get(imo, {"imo": imo})
+            fails  = failure_counts.get(imo, 0)
 
             if v_data.get("lat") is None and v_data.get("lon") is None:
                 failure_counts[imo] = fails + 1
@@ -609,11 +657,11 @@ def main():
 
                 for row in (user_imos_res.data or []):
                     imo = str(row['imo'])
-                    current_res = sb.table('vessels').select('*').eq('imo', imo).execute()
-                    if not current_res.data:
+                    # Use already-fetched data from batch instead of re-querying DB
+                    vessel_data = all_vessel_data.get(imo)
+                    if not vessel_data:
                         continue
 
-                    vessel_data = current_res.data[0]
                     user_alerts = _check_vessel_alerts(imo, vessel_data, prev_states.get(imo))
 
                     for alert_msg in user_alerts:
