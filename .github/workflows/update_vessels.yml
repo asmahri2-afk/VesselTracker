@@ -2,7 +2,6 @@ name: Update vessels data
 
 on:
   schedule:
-    # Every 30 minutes from 05:00 to 22:00 UTC daily
     - cron: "0,30 5-22 * * *"
   workflow_dispatch:
     inputs:
@@ -17,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
