@@ -1,35 +1,39 @@
 name: Update vessels data
 
 on:
-  push:
-    paths:
-      - "data/tracked_imos.json"
   schedule:
-    - cron: "30 5-22 * * *"
+    # Every 30 minutes from 05:00 to 22:00 UTC daily
+    - cron: "0,30 5-22 * * *"
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual trigger (optional)"
+        required: false
+        default: "Manual run"
 
 jobs:
   scrape:
+    name: Scrape vessel data
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
           pip install supabase requests
 
       - name: Run scraper
+        id: scraper
         env:
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
@@ -38,3 +42,9 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: python scrape_vesselfinder.py
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Scraper failed at $(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "View logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
