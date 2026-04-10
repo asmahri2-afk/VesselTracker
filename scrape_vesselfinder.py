@@ -1,117 +1,132 @@
-import json
+#!/usr/bin/env python3
+"""
+Vessel Tracking Script - Supabase Edition
+All original logic preserved. Only storage changed: JSON files → Supabase tables.
+
+Changes from original:
+  - Removed: file locking (not needed in GitHub Actions)
+  - Removed: load_json / save_json_atomic (replaced by Supabase)
+  - Removed: local file paths
+  - Added: Supabase client for all reads and writes
+  - Everything else: 100% identical to original
+"""
+
 import logging
+import math
 import os
 import re
-import requests
-import httpx
-import io
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from copy import copy
-from datetime import datetime, timezone
-from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-from openpyxl import load_workbook
-from openpyxl.styles import Font, Border, Side, PatternFill, Alignment
-# ============================================================
-# LOGGING
-# ============================================================
+import sys
+import time
+import unicodedata
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
+import requests
+from supabase import create_client
+
+# =============================================================================
+# SUPABASE
+# =============================================================================
+SUPABASE_URL = "https://rpzcphszvdgjsqnhwdhm.supabase.co"
+SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# =============================================================================
+# LOGGING
+# =============================================================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# HTTP CONFIG
-# ============================================================
+# =============================================================================
+# EXTERNAL SERVICES CONFIG
+# =============================================================================
+CALLMEBOT_PHONE   = os.getenv("CALLMEBOT_PHONE")
+CALLMEBOT_APIKEY  = os.getenv("CALLMEBOT_APIKEY")
+CALLMEBOT_ENABLED = bool(CALLMEBOT_PHONE and CALLMEBOT_APIKEY)
+CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"
 
-import random
-
-# Rotate User-Agents to reduce VesselFinder bot detection
-_USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-]
-
-HEADERS = {
-    "User-Agent": random.choice(_USER_AGENTS),
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Referer": "https://www.vesselfinder.com/",
-    "DNT": "1",
-}
-
-MYSHIPTRACKING_URL = "https://www.myshiptracking.com/requests/vesselsonmaptempTTT.php"
-
+RENDER_BASE = os.getenv("RENDER_BASE", "https://vessel-api-s85s.onrender.com")
 API_SECRET  = os.getenv("API_SECRET", "")
 
-# Max parallel workers for batch — keep low to avoid hammering VesselFinder
-BATCH_MAX_WORKERS = 2  # Reduced from 4 — fewer parallel requests reduces bot detection risk
-BATCH_MAX_IMOS    = 50  # safety cap per batch request
+# =============================================================================
+# TRACKING THRESHOLDS (unchanged)
+# =============================================================================
+ARRIVAL_RADIUS_NM     = 35.5
+MIN_MOVE_NM           = 5.0
+MIN_SOG_FOR_ETA       = 0.5
+MAX_ETA_HOURS         = 240
+MAX_ETA_SOG_CAP       = 18.0
+MAX_AIS_FOR_ETA_MIN   = 360
+MIN_DISTANCE_FOR_ETA  = 5.0
+ARRIVAL_SOG_THRESHOLD = 1.0
 
-# ============================================================
-# FASTAPI APP + CORS
-# ============================================================
+API_MAX_RETRIES        = 3
+API_RETRY_BACKOFF_BASE = 2.0
+MAX_IMO_FAILURES       = 5
+ALERT_COOLDOWN_MIN     = 45
 
-app = FastAPI()
+# =============================================================================
+# DATABASE HELPERS (replaces load_json / save_json_atomic)
+# =============================================================================
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def db_load_tracked_imos() -> List[str]:
+    res = sb.table("tracked_imos").select("imo").execute()
+    return [r["imo"] for r in (res.data or [])]
 
-# ============================================================
-# REQUEST MODELS
-# ============================================================
+def db_load_ports() -> Dict:
+    res = sb.table("ports").select("name,lat,lon").execute()
+    return {r["name"].upper(): {"lat": r["lat"], "lon": r["lon"]}
+            for r in (res.data or [])}
 
-class BatchRequest(BaseModel):
-    imos: List[str]
+def db_load_vessels_state() -> Dict:
+    res = sb.table("vessels").select("*").execute()
+    return {r["imo"]: r for r in (res.data or [])}
 
-# ============================================================
-# UTILITY HELPERS
-# ============================================================
+def db_load_static_cache() -> Dict:
+    res = sb.table("static_vessel_cache").select("*").execute()
+    return {r["imo"]: r for r in (res.data or [])}
 
-def count_decimals(val: Any) -> int:
-    if val is None:
-        return 0
-    s = str(val)
-    if "." in s:
-        return len(s.split(".")[-1].rstrip("0"))
-    return 0
+def db_load_failure_counts() -> Dict:
+    res = sb.table("failure_counts").select("imo,count").execute()
+    return {r["imo"]: r["count"] for r in (res.data or [])}
 
-def parse_vf_timestamp(ts: Optional[str]) -> Optional[datetime]:
-    if not ts:
-        return None
-    ts = ts.replace(" UTC", "").strip()
-    for fmt in ("%b %d, %Y %H:%M", "%B %d, %Y %H:%M"):
-        try:
-            return datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    logger.warning(f"Could not parse VF timestamp: '{ts}'")
-    return None
+def db_save_vessel(state: Dict):
+    row = dict(state)
+    row["updated_at"] = datetime.now(timezone.utc).isoformat()
+    sb.table("vessels").upsert(row).execute()
 
-def get_vf_age_minutes(last_pos_utc: Optional[str]) -> int:
-    dt = parse_vf_timestamp(last_pos_utc)
-    if not dt:
-        return 999
-    age = (datetime.now(timezone.utc) - dt).total_seconds() / 60
-    return int(age)
+def db_save_static_cache(imo: str, entry: Dict):
+    row = dict(entry)
+    row["imo"] = imo
+    sb.table("static_vessel_cache").upsert(row).execute()
 
-# ============================================================
-# INPUT VALIDATION
-# ============================================================
+def db_save_failure_count(imo: str, count: int):
+    sb.table("failure_counts").upsert({"imo": imo, "count": count}).execute()
+
+# =============================================================================
+# UTILITY FUNCTIONS (unchanged)
+# =============================================================================
+
+def safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+def haversine_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    lat1_r, lon1_r = math.radians(lat1), math.radians(lon1)
+    lat2_r, lon2_r = math.radians(lat2), math.radians(lon2)
+    dlat, dlon = lat2_r - lat1_r, lon2_r - lon1_r
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2)**2
+    return (R * 2 * math.asin(math.sqrt(a))) * 0.539957
 
 def validate_imo(imo: str) -> bool:
     imo = str(imo).strip()
@@ -123,548 +138,498 @@ def validate_imo(imo: str) -> bool:
     except Exception:
         return False
 
-# ============================================================
-# HTML HELPERS – VESSELFINDER
-# ============================================================
+def normalize_string(s: str) -> str:
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^A-Z]", "", s.upper())
 
-def extract_table_data(soup: BeautifulSoup, table_class: str) -> Dict[str, str]:
-    data: Dict[str, str] = {}
-    tables = soup.find_all(class_=table_class)
-    if not tables:
-        return data
+def parse_ais_time(s: str) -> Optional[datetime]:
+    if not s:
+        return None
+    s = s.replace(" UTC", "").strip()
+    try:
+        return datetime.strptime(s, "%b %d, %Y %H:%M").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
 
-    for table in tables:
-        for row in table.find_all("tr"):
-            label_el = row.find(
-                class_=lambda x: x and ("tpc1" in x or "tpx1" in x or "n3" in x)
-            )
-            value_el = row.find(
-                class_=lambda x: x and ("tpc2" in x or "tpx2" in x or "v3" in x)
-            )
-            if not (label_el and value_el):
-                continue
-            label_parts = [c.strip() for c in label_el.contents if isinstance(c, str)]
-            label = " ".join(label_parts).replace(":", "").strip()
-            value = value_el.get_text(strip=True)
-            if label:
-                data[label] = value
-    return data
+def age_minutes(t: str) -> Optional[float]:
+    dt = parse_ais_time(t)
+    if not dt:
+        return None
+    return (datetime.now(timezone.utc) - dt).total_seconds() / 60
 
-def extract_mmsi(soup: BeautifulSoup, static_data: Dict[str, str]) -> Optional[str]:
-    for s in soup.find_all("script"):
-        if not s.string:
+def humanize_age(minutes: Optional[float]) -> str:
+    if minutes is None:
+        return "N/A"
+    minutes = int(round(minutes))
+    if minutes < 60:
+        return f"{minutes} min ago"
+    h, m = divmod(minutes, 60)
+    if h < 24:
+        return f"{h}h {m}m ago" if m else f"{h}h ago"
+    d, rh = divmod(h, 24)
+    return f"{d}d {rh}h ago" if rh else f"{d}d ago"
+
+def humanize_eta(h: float) -> str:
+    total_m = int(round(h * 60))
+    hm, mm = divmod(total_m, 60)
+    if hm < 24:
+        return f"{hm}h {mm}m" if mm else f"{hm}h"
+    d, rh = divmod(hm, 24)
+    return f"{d}d {rh}h" if rh else f"{d}d"
+
+# =============================================================================
+# WHATSAPP (unchanged)
+# =============================================================================
+
+def send_whatsapp(text: str) -> bool:
+    if not CALLMEBOT_ENABLED:
+        return False
+    try:
+        r = requests.get(CALLMEBOT_API_URL, params={
+            "phone": CALLMEBOT_PHONE,
+            "apikey": CALLMEBOT_APIKEY,
+            "text": text
+        }, timeout=15)
+        return r.status_code == 200
+    except Exception as e:
+        logger.error(f"WhatsApp send failed: {e}")
+        return False
+
+# =============================================================================
+# PORT AND ETA LOGIC (unchanged)
+# =============================================================================
+
+ALIASES_RAW = {
+    "laayoune": "LAAYOUNE", "layoune": "LAAYOUNE", "EH EUN": "LAAYOUNE", "leyoune": "LAAYOUNE",
+    "tantan": "TAN TAN", "tan tan": "TAN TAN", "tan-tan": "TAN TAN", "tan tan anch": "TAN TAN",
+    "dakhla": "DAKHLA", "dakhla port": "DAKHLA", "ad dakhla": "DAKHLA",
+    "dakhla anch": "DAKHLA ANCH", "dakhla anch.": "DAKHLA ANCH", "dakhla anchorage": "DAKHLA ANCH",
+    "dakhla anch area": "DAKHLA ANCH",
+    "agadir": "AGADIR", "port agadir": "AGADIR",
+    "essaouira": "ESSAOUIRA", "safi": "SAFI",
+    "casa": "CASABLANCA", "casablanca": "CASABLANCA", "cassablanca": "CASABLANCA",
+    "mohammedia": "MOHAMMEDIA",
+    "jorf": "JORF LASFAR", "jorf lasfar": "JORF LASFAR",
+    "kenitra": "KENITRA",
+    "tanger": "TANGER VILLE", "tangier": "TANGER VILLE", "tanger ville": "TANGER VILLE",
+    "tanger med": "TANGER MED", "tm2": "TANGER MED",
+    "nador": "NADOR",
+    "al hoceima": "AL HOCEIMA", "alhucemas": "AL HOCEIMA",
+    "las palmas": "LAS PALMAS", "lpa": "LAS PALMAS", "las palmas anch": "LAS PALMAS",
+    "arrecife": "ARRECIFE",
+    "puerto del rosario": "PUERTO DEL ROSARIO", "pdr": "PUERTO DEL ROSARIO",
+    "santa cruz": "SANTA CRUZ DE TENERIFE", "sctf": "SANTA CRUZ DE TENERIFE",
+    "santa cruz tenerife": "SANTA CRUZ DE TENERIFE",
+    "san sebastian": "SAN SEBASTIAN DE LA GOMERA",
+    "la restinga": "LA RESTINGA",
+    "la palma": "LA PALMA",
+    "granadilla": "GRANADILLA", "puerto de granadilla": "GRANADILLA",
+    "ceuta": "CEUTA", "melilla": "MELILLA",
+    "algeciras": "ALGECIRAS", "alg": "ALGECIRAS",
+    "gibraltar": "GIBRALTAR", "gib": "GIBRALTAR",
+    "huelva": "HUELVA",
+    "huelva anch": "HUELVA ANCH", "huelva anchorage": "HUELVA ANCH",
+    "cadiz": "CADIZ", "cadiz anch": "CADIZ",
+    "sevilla": "SEVILLA", "seville": "SEVILLA",
+    "malaga": "MALAGA", "motril": "MOTRIL", "almeria": "ALMERIA",
+    "cartagena": "CARTAGENA", "valencia": "VALENCIA",
+    "sines": "SINES", "setubal": "SETUBAL", "lisbon": "LISBON", "lisboa": "LISBON"
+}
+DEST_ALIASES = {normalize_string(k): v for k, v in ALIASES_RAW.items()}
+
+def match_destination_port(dest: str, ports: Dict) -> Tuple[Optional[str], Optional[Dict]]:
+    if not dest:
+        return None, None
+    norm = normalize_string(dest)
+    if norm in DEST_ALIASES:
+        canonical = DEST_ALIASES[norm]
+        return canonical, ports.get(canonical)
+    port_lookup = {normalize_string(p): p for p in ports}
+    if norm in port_lookup:
+        name = port_lookup[norm]
+        return name, ports.get(name)
+    for canon_key, port_name in port_lookup.items():
+        if canon_key and canon_key in norm:
+            return port_name, ports.get(port_name)
+    return None, None
+
+def nearest_port(lat: float, lon: float, ports: Dict) -> Tuple[Optional[str], Optional[float]]:
+    best_name, best_dist = None, None
+    for name, coords in ports.items():
+        try:
+            d = haversine_nm(lat, lon, coords["lat"], coords["lon"])
+            if best_dist is None or d < best_dist:
+                best_dist, best_name = d, name
+        except Exception:
             continue
-        m = re.search(r"MMSI\s*=\s*(\d+)", s.string)
-        if m:
-            return m.group(1)
-    if "MMSI" in static_data:
-        v = static_data["MMSI"].strip()
-        if v:
-            return v
-    for key, value in static_data.items():
-        if "MMSI" in key.upper():
-            v = value.strip()
-            if v:
-                return v
+    return best_name, best_dist
+
+# =============================================================================
+# API COMMUNICATION (unchanged)
+# =============================================================================
+
+def fetch_with_retry(url: str) -> Optional[Dict]:
+    headers: Dict[str, str] = {"User-Agent": "VesselTracker/1.0"}
+    if API_SECRET:
+        headers["X-API-Secret"] = API_SECRET
+    for attempt in range(API_MAX_RETRIES):
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.warning(f"API attempt {attempt+1}/{API_MAX_RETRIES} failed for {url}: {e}")
+            if attempt < API_MAX_RETRIES - 1:
+                time.sleep(API_RETRY_BACKOFF_BASE * (2 ** attempt))
     return None
 
-# ============================================================
-# MYSHIPTRACKING HELPER
-# ============================================================
+def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
+    result = static_cache.get(imo, {}).copy()
+    api_data = fetch_with_retry(f"{RENDER_BASE}/vessel-full/{imo}")
 
-def get_myshiptracking_pos(
-    mmsi: str,
-    center_lat: Optional[float],
-    center_lon: Optional[float],
-    session: requests.Session,
-    pad: float = 0.9,
-) -> Optional[Dict[str, Any]]:
-    if center_lat is None or center_lon is None:
-        return None
+    if api_data and api_data.get("found") is not False:
+        result["lat"]         = safe_float(api_data.get("lat")) if api_data.get("lat") is not None else result.get("lat")
+        result["lon"]         = safe_float(api_data.get("lon")) if api_data.get("lon") is not None else result.get("lon")
+        result["sog"]         = safe_float(api_data.get("sog"), 0.0)
+        result["cog"]         = safe_float(api_data.get("cog"))
+        result["last_pos_utc"]= api_data.get("last_pos_utc")
+        result["destination"] = (api_data.get("destination") or "").strip()
+        result["name"]        = (api_data.get("vessel_name") or api_data.get("name") or result.get("name") or f"IMO {imo}").strip()
+        result["ship_type"]   = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
+        result["flag"]        = (api_data.get("flag") or result.get("flag") or "").strip()
 
-    try:
-        lat_f, lon_f = float(center_lat), float(center_lon)
-    except (TypeError, ValueError):
-        return None
+        static_keys = ["deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m", "draught_m"]
+        for key in static_keys:
+            if api_data.get(key) is not None:
+                result[key] = api_data[key]
+            elif result.get(key) is None:
+                result[key] = None
 
-    current_year = datetime.now().year
+        # Update static cache in Supabase
+        cache_entry = {k: result.get(k) for k in static_keys + ["name", "ship_type", "flag"]}
+        db_save_static_cache(imo, cache_entry)
 
-    params = {
-        "type": "json",
-        "minlat": lat_f - pad, "maxlat": lat_f + pad,
-        "minlon": lon_f - pad, "maxlon": lon_f + pad,
-        "zoom": 15, "selid": -1, "seltype": 0, "timecode": -1,
-        "filters": json.dumps({
-            "vtypes": ",0,3,4,6,7,8,9,10,11,12,13", "ports": "1",
-            "minsog": 0, "maxsog": 60, "minsz": 0, "maxsz": 500,
-            "minyr": 1950, "maxyr": current_year, "status": "",
-            "mapflt_from": "", "mapflt_dest": "",
-        }),
+    result["imo"] = imo
+    return result
+
+# =============================================================================
+# CORE LOGIC (unchanged)
+# =============================================================================
+
+def build_alert_and_state(
+    v: Dict,
+    ports: Dict,
+    prev: Optional[Dict],
+    failure_counts: Dict[str, int]
+) -> Tuple[Optional[str], Dict]:
+
+    imo, name = v["imo"], v.get("name", "Unknown")
+    lat, lon  = v.get("lat"), v.get("lon")
+    sog       = v.get("sog", 0.0)
+    cog       = v.get("cog")
+    last      = v.get("last_pos_utc")
+    dest      = v.get("destination", "")
+
+    cog_str = f"{cog:.0f}°" if cog is not None else "N/A"
+
+    new_state = {
+        "imo": imo, "name": name, "lat": lat, "lon": lon,
+        "sog": sog, "cog": cog, "last_pos_utc": last,
+        "destination": dest, "done": False,
+        "ship_type": v.get("ship_type"), "flag": v.get("flag"),
+        "deadweight_t": v.get("deadweight_t"), "gross_tonnage": v.get("gross_tonnage"),
+        "year_of_build": v.get("year_of_build"), "length_overall_m": v.get("length_overall_m"),
+        "beam_m": v.get("beam_m"), "draught_m": v.get("draught_m"),
+        "last_alert_utc": prev.get("last_alert_utc") if prev else None,
     }
 
-    mst_headers = dict(HEADERS)
-    mst_headers["Referer"] = "https://www.myshiptracking.com/"
+    if lat is None or lon is None:
+        if prev:
+            new_state["done"] = prev.get("done", False)
+        return None, new_state
 
-    try:
-        r = session.get(MYSHIPTRACKING_URL, params=params, headers=mst_headers, timeout=10)
-        if r.status_code != 200:
-            logger.warning(f"MyShipTracking returned status {r.status_code} for MMSI {mmsi}")
-            return None
+    age     = age_minutes(last) if last else None
+    age_txt = humanize_age(age)
+    too_old = age is not None and age > MAX_AIS_FOR_ETA_MIN
 
-        lines = [l.strip() for l in r.text.splitlines() if l.strip()]
-        if len(lines) < 3:
-            return None
+    near_name, near_dist = nearest_port(lat, lon, ports)
+    dest_name, dest_data = match_destination_port(dest, ports)
 
-        target_mmsi = str(mmsi).strip()
-        for line in lines[2:]:
-            parts = line.split("\t") if "\t" in line else line.split()
-            if len(parts) >= 7 and parts[2].strip() == target_mmsi:
-                return {
-                    "lat": float(parts[4]),
-                    "lon": float(parts[5]),
-                    "sog": float(parts[6]) if parts[6] != "" else None,
-                    "cog": float(parts[7]) if len(parts) > 7 and parts[7] != "" else None,
-                }
+    dest_dist = None
+    if dest_data:
+        dest_dist = haversine_nm(lat, lon, dest_data["lat"], dest_data["lon"])
 
-    except Exception as e:
-        logger.warning(f"MyShipTracking fetch failed for MMSI {mmsi}: {e}")
-
-    return None
-
-# ============================================================
-# MAIN SCRAPER
-# ============================================================
-
-def scrape_vf_full(imo: str, session: requests.Session) -> Dict[str, Any]:
-    url = f"https://www.vesselfinder.com/vessels/details/{imo}"
-
-    r = session.get(url, headers=HEADERS, timeout=20)
-
-    if r.status_code == 404:
-        logger.info(f"IMO {imo} returned 404 from VesselFinder")
-        return {"found": False, "imo": imo}
-    r.raise_for_status()
-
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    name_el = soup.select_one("h1.title")
-    name = name_el.get_text(strip=True) if name_el else f"IMO {imo}"
-    dest_el = soup.select_one("div.vi__r1.vi__sbt a._npNa")
-    destination = dest_el.get_text(strip=True) if dest_el else ""
-
-    info_icon = soup.select_one("svg.ttt1.info")
-    last_pos_utc = info_icon["data-title"] if info_icon and info_icon.has_attr("data-title") else None
-    logger.info(f"IMO {imo} | name={name} | last_pos_utc={last_pos_utc}")
-
-    tech_data      = extract_table_data(soup, "tpt1")
-    dims_data      = extract_table_data(soup, "tptfix")
-    ais_table_data = extract_table_data(soup, "vessel-info-table")
-    aparams_data   = extract_table_data(soup, "aparams")
-    static_data    = {**tech_data, **dims_data, **ais_table_data, **aparams_data}
-    mmsi           = extract_mmsi(soup, static_data)
-
-    draught_val = static_data.get("Current draught") or static_data.get("Draught")
-    if not draught_val:
-        match = re.search(r"(?:draught|draft)\s+(?:of\s+)?(\d+(?:\.\d+)?)\s*m", soup.get_text(), re.IGNORECASE)
-        if match:
-            draught_val = f"{match.group(1)} m"
-
-    final_static_data = {
-        "imo": imo,
-        "vessel_name": name,
-        "ship_type": static_data.get("Ship Type") or static_data.get("Ship type") or static_data.get("Type") or "",
-        "flag": (soup.select_one("div.title-flag-icon").get("title") if soup.select_one("div.title-flag-icon") else None),
-        "mmsi": mmsi,
-        "draught_m": draught_val or "",
-        "deadweight_t": static_data.get("Deadweight") or static_data.get("DWT"),
-        "gross_tonnage": static_data.get("Gross Tonnage"),
-        "year_of_build": static_data.get("Year of Build"),
-        "length_overall_m": static_data.get("Length Overall"),
-        "beam_m": static_data.get("Beam"),
-    }
-
-    vf_lat = vf_lon = sog = cog = None
-    djson_div = soup.find("div", id="djson")
-    if djson_div and djson_div.has_attr("data-json"):
+    eta_h, eta_utc_str, eta_text = None, None, None
+    if dest_dist is not None and dest_dist > MIN_DISTANCE_FOR_ETA and sog >= MIN_SOG_FOR_ETA and not too_old:
+        speed = min(max(sog, MIN_SOG_FOR_ETA), MAX_ETA_SOG_CAP)
         try:
-            ais = json.loads(djson_div["data-json"])
-            vf_lat = float(ais.get("ship_lat")) if ais.get("ship_lat") else None
-            vf_lon = float(ais.get("ship_lon")) if ais.get("ship_lon") else None
-            sog = ais.get("ship_sog")
-            cog = ais.get("ship_cog")
-            logger.info(f"IMO {imo} | VF AIS: lat={vf_lat}, lon={vf_lon}, sog={sog}, cog={cog}")
+            raw_h = dest_dist / speed
+            if raw_h <= MAX_ETA_HOURS:
+                eta_h = raw_h
+                eta_dt = datetime.now(timezone.utc) + timedelta(hours=eta_h)
+                eta_utc_str = eta_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+                eta_text = humanize_eta(eta_h)
         except Exception as e:
-            logger.warning(f"IMO {imo} | Failed to parse djson AIS data: {e}")
+            logger.warning(f"ETA calc failed for {imo}: {e}")
 
-    mst_data = get_myshiptracking_pos(mmsi, vf_lat, vf_lon, session) if (mmsi and vf_lat) else None
+    new_state.update({
+        "nearest_port": near_name, "nearest_distance_nm": near_dist,
+        "destination_port": dest_name, "destination_distance_nm": dest_dist,
+        "eta_hours": eta_h, "eta_utc": eta_utc_str, "eta_text": eta_text
+    })
 
-    use_mst = False
-    vf_age  = get_vf_age_minutes(last_pos_utc)
-    MAX_VF_AGE = 60
+    check_dist = dest_dist if dest_dist is not None else near_dist
+    arrived = check_dist is not None and check_dist <= ARRIVAL_RADIUS_NM and sog <= ARRIVAL_SOG_THRESHOLD
+    if arrived:
+        new_state["done"] = True
 
-    if mst_data:
-        vf_precision  = count_decimals(vf_lat) + count_decimals(vf_lon) if vf_lat is not None else 0
-        mst_precision = count_decimals(mst_data["lat"]) + count_decimals(mst_data["lon"])
+    if not prev:
+        msg = [
+            f"🚢 {name} (IMO {imo})",
+            "📌 Status: First tracking detected",
+            f"🕒 AIS: {age_txt}",
+            f"⚡ Speed: {sog:.1f} kn | 🧭 {cog_str}",
+            f"📍 Position: {lat:.4f}, {lon:.4f}",
+            f"⚓ Nearest port: {near_name or 'N/A'} (~{near_dist:.1f} NM)" if near_dist else "⚓ Nearest port: N/A",
+            f"🎯 Destination: {dest or 'N/A'}"
+        ]
+        if dest_name and dest_dist is not None:
+            msg[-1] += f" (~{dest_dist:.1f} NM)"
+        if eta_text:
+            msg.append(f"⏱ ETA: {eta_text} ({eta_utc_str})")
+        new_state["last_alert_utc"] = datetime.now(timezone.utc).isoformat()
+        return "\n".join(msg), new_state
 
-        if vf_lat is None:
-            use_mst = True
-            logger.info(f"IMO {imo} | Using MST: VF has no position")
-        elif vf_age > MAX_VF_AGE:
-            use_mst = True
-            logger.info(f"IMO {imo} | Using MST: VF data is {vf_age} min old (>{MAX_VF_AGE})")
-        elif mst_precision > vf_precision:
-            use_mst = True
-            logger.info(f"IMO {imo} | Using MST: higher precision ({mst_precision} vs {vf_precision})")
-        else:
-            use_mst = False
-            logger.info(f"IMO {imo} | Using VF: fresher or equal precision (age={vf_age} min)")
+    if prev.get("done") and new_state["done"]:
+        return None, new_state
 
-    if use_mst and mst_data:
-        lat, lon = mst_data["lat"], mst_data["lon"]
-        sog = mst_data.get("sog", sog)
-        cog = mst_data.get("cog", cog)
-        ais_source = "myshiptracking"
-    else:
-        lat, lon = vf_lat, vf_lon
-        ais_source = "vesselfinder"
+    old_dest     = (prev.get("destination") or "").strip()
+    old_canon, _ = match_destination_port(old_dest, ports)
+    new_canon    = dest_name
+    dest_changed = old_canon != new_canon if (old_dest or dest) else False
 
-    logger.info(f"IMO {imo} | Final: lat={lat}, lon={lon}, sog={sog}, source={ais_source}")
+    p_lat, p_lon = prev.get("lat"), prev.get("lon")
+    moved, diff  = False, None
+    if p_lat is not None and p_lon is not None:
+        diff  = haversine_nm(p_lat, p_lon, lat, lon)
+        moved = diff >= MIN_MOVE_NM
 
-    return {
-        "found": True,
-        "destination": destination,
-        "last_pos_utc": last_pos_utc,
-        **final_static_data,
-        "lat": lat, "lon": lon, "sog": sog, "cog": cog,
-        "ais_source": ais_source,
-    }
+    arrival_event = arrived and not prev.get("done")
 
-# ============================================================
-# API ENDPOINTS
-# ============================================================
+    if not (dest_changed or moved or arrival_event):
+        return None, new_state
 
-def _check_auth(request: Request, imo: str = ""):
-    """Shared auth check for all endpoints."""
-    if API_SECRET:
-        client_secret = request.headers.get("X-API-Secret", "")
-        if client_secret != API_SECRET:
-            logger.warning(f"Unauthorized request for IMO {imo} from {request.client.host}")
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-
-@app.get("/ping")
-def ping():
-    return {"ok": True}
-
-
-@app.get("/vessel-full/{imo}")
-def vessel_full(imo: str, request: Request):
-    _check_auth(request, imo)
-
-    if not validate_imo(imo):
-        logger.warning(f"Invalid IMO rejected: {imo}")
-        raise HTTPException(status_code=400, detail="Invalid IMO number")
-
-    with requests.Session() as session:
-        try:
-            data = scrape_vf_full(imo, session)
-        except Exception as e:
-            logger.error(f"Scrape failed for IMO {imo}: {e}", exc_info=True)
-            raise HTTPException(status_code=502, detail="Upstream scrape failed")
-
-    if not data.get("found"):
-        raise HTTPException(status_code=404, detail="Vessel not found")
-
-    return data
-
-
-@app.post("/vessel-batch")
-def vessel_batch(body: BatchRequest, request: Request):
-    """
-    Fetch multiple vessels in parallel.
-    POST /vessel-batch
-    Body: {"imos": ["9427079", "9437854", ...]}
-    Returns: {"results": {"9427079": {...}, "9437854": {...}}, "errors": {"bad_imo": "reason"}}
-    """
-    _check_auth(request)
-
-    # Validate and deduplicate
-    imos = list(dict.fromkeys(body.imos))  # preserve order, remove duplicates
-
-    if len(imos) > BATCH_MAX_IMOS:
-        raise HTTPException(status_code=400, detail=f"Too many IMOs — max {BATCH_MAX_IMOS} per batch")
-
-    invalid = [imo for imo in imos if not validate_imo(imo)]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid IMOs: {', '.join(invalid)}")
-
-    results: Dict[str, Any] = {}
-    errors:  Dict[str, str] = {}
-
-    def fetch_one(imo: str) -> tuple:
-        try:
-            # Random delay 2-5s between requests to avoid rate limiting
-            time.sleep(random.uniform(2, 5))
-            with requests.Session() as session:
-                # Rotate User-Agent per request
-                HEADERS["User-Agent"] = random.choice(_USER_AGENTS)
-                data = scrape_vf_full(imo, session)
-            if not data.get("found"):
-                return imo, None, "Vessel not found"
-            return imo, data, None
-        except Exception as e:
-            logger.error(f"Batch scrape failed for IMO {imo}: {e}")
-            return imo, None, str(e)
-
-    logger.info(f"Batch request: {len(imos)} vessels, {BATCH_MAX_WORKERS} workers")
-
-    with ThreadPoolExecutor(max_workers=BATCH_MAX_WORKERS) as executor:
-        futures = {executor.submit(fetch_one, imo): imo for imo in imos}
-        for future in as_completed(futures):
-            imo, data, error = future.result()
-            if error:
-                errors[imo] = error
-            else:
-                results[imo] = data
-
-    logger.info(f"Batch complete: {len(results)} success, {len(errors)} errors")
-
-    return {
-        "results": results,
-        "errors":  errors,
-        "total":   len(imos),
-        "success": len(results),
-        "failed":  len(errors),
-    }
-
-
-# ============================================================
-# SOF — STATEMENT OF FACTS GENERATOR
-# ============================================================
-
-
-DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
-
-class SOFRow(BaseModel):
-    date:    Optional[str] = ''
-    wfrom:   Optional[str] = ''
-    wto:     Optional[str] = ''
-    sfrom:   Optional[str] = ''
-    sto:     Optional[str] = ''
-    cranes:  Optional[str] = ''
-    qty:     Optional[str] = ''
-    remarks: Optional[str] = ''
-
-class SOFData(BaseModel):
-    agent:             Optional[str] = ''
-    operation_type:    Optional[str] = 'import'  # 'import' = discharging, 'export' = loading
-    vessel:            Optional[str] = ''
-    port:              Optional[str] = ''
-    owners:            Optional[str] = ''
-    cargo:             Optional[str] = ''
-    bl_weight:         Optional[str] = ''
-    bl_number:         Optional[str] = ''
-    nor_accepted:      Optional[str] = 'AS PER TERMS AND CONDITIONS OF THE RELEVENT C/P.'
-    port_hours:        Optional[str] = ''
-    general_remarks:   Optional[str] = ''
-    remarks:           Optional[str] = ''
-    master_remarks:    Optional[str] = ''
-    berthed_date:      Optional[str] = ''
-    berthed_time:      Optional[str] = ''
-    disch_start_date:  Optional[str] = ''
-    disch_start_time:  Optional[str] = ''
-    disch_end_date:    Optional[str] = ''
-    disch_end_time:    Optional[str] = ''
-    cargo_docs_date:   Optional[str] = ''
-    cargo_docs_time:   Optional[str] = ''
-    sailing_date:      Optional[str] = ''
-    sailing_time:      Optional[str] = ''
-    eosp_date:         Optional[str] = ''
-    eosp_time:         Optional[str] = ''
-    nor_tender_date:   Optional[str] = ''
-    nor_tender_time:   Optional[str] = ''
-    anchor_drop_date:  Optional[str] = ''
-    anchor_drop_time:  Optional[str] = ''
-    anchor_weigh_date: Optional[str] = ''
-    anchor_weigh_time: Optional[str] = ''
-    pilot_date:        Optional[str] = ''
-    pilot_time:        Optional[str] = ''
-    rows:              List[SOFRow] = []
-
-def fmt_dt(date: str, time: str) -> str:
-    if not date:
-        return ''
-    try:
-        parts = date.split('-')
-        d = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else date
-    except Exception:
-        d = date
-    t = time.replace(':', '') if time else ''
-    return f"{d} at   {t} hr" if t else d
-
-def get_day_name(date_str: str) -> str:
-    if not date_str:
-        return ''
-    try:
-        dt = datetime.strptime(date_str, '%Y-%m-%d')
-        return DAYS[dt.weekday()]
-    except Exception:
-        return ''
-
-SOF_TEMPLATE_BYTES: Optional[bytes] = None
-
-async def get_sof_template() -> bytes:
-    global SOF_TEMPLATE_BYTES
-    if SOF_TEMPLATE_BYTES:
-        return SOF_TEMPLATE_BYTES
-    # Fetch template from GitHub Pages
-    url = 'https://asmahri2-afk.github.io/test/SOF_TEMPLATE.xlsx'
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(url)
-        r.raise_for_status()
-        SOF_TEMPLATE_BYTES = r.content
-        logger.info(f"SOF template loaded: {len(SOF_TEMPLATE_BYTES)} bytes")
-        return SOF_TEMPLATE_BYTES
-
-
-@app.post('/sof/generate')
-async def sof_generate(data: SOFData, request: Request):
-    # Auth check
-    if API_SECRET:
-        client_secret = request.headers.get('X-API-Secret', '')
-        if client_secret != API_SECRET:
-            raise HTTPException(status_code=401, detail='Unauthorized')
-
-    try:
-        template_bytes = await get_sof_template()
-        wb = load_workbook(io.BytesIO(template_bytes))
-        ws = wb.active
-
-        # Operation verb: import = discharging, export = loading
-        operation_verb = 'loading' if (data.operation_type or '').lower() == 'export' else 'discharging'
-
-        # Build tag → value map
-        tag_values = {
-            '{{AGENT}}':          data.agent or '',
-            '{{VESSEL_NAME}}':    data.vessel or '',
-            '{{PORT}}':           data.port or '',
-            '{{OWNERS}}':         data.owners or '',
-            '{{CARGO}}':          data.cargo or '',
-            '{{BL_WEIGHT}}':      data.bl_weight or '',
-            '{{BL_NUMBER}}':      data.bl_number or '',
-            '{{PORT_HOURS}}':     data.port_hours or '',
-            '{{GENERAL_REMARKS}}': data.general_remarks or '',
-            '{{REMARKS}}':        data.remarks or '',
-            '{{MASTER_REMARKS}}': data.master_remarks or '',
-            '{{NOR_ACCEPTED}}':   data.nor_accepted or '',
-            '{{OPERATION_VERB}}': operation_verb,
-            '{{BERTHED_DATE}} at {{BERTHED_TIME}} hr':         fmt_dt(data.berthed_date, data.berthed_time),
-            '{{DISCH_START_DATE}} at {{DISCH_START_TIME}} hr': fmt_dt(data.disch_start_date, data.disch_start_time),
-            '{{DISCH_END_DATE}} at {{DISCH_END_TIME}} hr':     fmt_dt(data.disch_end_date, data.disch_end_time),
-            '{{CARGO_DOCS_DATE}} at {{CARGO_DOCS_TIME}} hr':   fmt_dt(data.cargo_docs_date, data.cargo_docs_time),
-            '{{SAILING_DATE}} at {{SAILING_TIME}} hr':         fmt_dt(data.sailing_date, data.sailing_time),
-            '{{EOSP_DATE}} at {{EOSP_TIME}} hr':               fmt_dt(data.eosp_date, data.eosp_time),
-            '{{NOR_TENDER_DATE}} at {{NOR_TENDER_TIME}} hr':   fmt_dt(data.nor_tender_date, data.nor_tender_time),
-            '{{ANCHOR_DROP_DATE}} at {{ANCHOR_DROP_TIME}} hr': fmt_dt(data.anchor_drop_date, data.anchor_drop_time),
-            '{{ANCHOR_WEIGH_DATE}} at {{ANCHOR_WEIGH_TIME}} hr': fmt_dt(data.anchor_weigh_date, data.anchor_weigh_time),
-            '{{PILOT_DATE}} at {{PILOT_TIME}} hr':             fmt_dt(data.pilot_date, data.pilot_time),
-            'M/V {{VESSEL_NAME}}': f"M/V {data.vessel or ''}",
-        }
-
-        # Replace all tags preserving cell styles
-        for row in ws.iter_rows():
-            for cell in row:
-                if cell.value and isinstance(cell.value, str):
-                    val = cell.value
-                    for tag, replacement in tag_values.items():
-                        if tag in val:
-                            val = val.replace(tag, replacement)
-                    cell.value = val
-
-        # Handle dynamic ops rows
-        marker_row = template_row = end_row = None
-        for row in ws.iter_rows():
-            for cell in row:
-                if cell.value == '{{#EACH_ROW}}':   marker_row = cell.row
-                elif cell.value == '{{ROW_DATE}}':   template_row = cell.row
-                elif cell.value == '{{/EACH_ROW}}':  end_row = cell.row
-
-        if marker_row and template_row and data.rows:
-            # Capture template row styles before clearing
-            tpl_styles = {}
-            for col in range(1, 12):
-                c = ws.cell(row=template_row, column=col)
-                tpl_styles[col] = {
-                    'font':      copy(c.font),
-                    'border':    copy(c.border),
-                    'fill':      copy(c.fill),
-                    'alignment': copy(c.alignment),
-                }
-
-            # Clear marker/template/end rows
-            for r in filter(None, [marker_row, template_row, end_row]):
-                for col in range(1, 12):
-                    ws.cell(row=r, column=col).value = None
-
-            # Write data rows
-            for i, row_data in enumerate(data.rows):
-                r = marker_row + i
-                values = [
-                    fmt_dt(row_data.date, '').split(' ')[0] if row_data.date else '',
-                    get_day_name(row_data.date),
-                    row_data.wfrom.replace(':','') if row_data.wfrom else '',
-                    row_data.wto.replace(':','') if row_data.wto else '',
-                    row_data.sfrom.replace(':','') if row_data.sfrom else '',
-                    row_data.sto.replace(':','') if row_data.sto else '',
-                    row_data.cranes or '',
-                    row_data.qty or '',
-                    '',
-                    row_data.remarks or '',
-                    '',
-                ]
-                for col, val in enumerate(values, 1):
-                    cell = ws.cell(row=r, column=col)
-                    cell.value = val if val else None
-                    s = tpl_styles.get(col, {})
-                    if s.get('font'):      cell.font = s['font']
-                    if s.get('border'):    cell.border = s['border']
-                    if s.get('fill'):      cell.fill = s['fill']
-                    if s.get('alignment'): cell.alignment = s['alignment']
-
-        # ── Logo swap ─────────────────────────────────────────────────────────
-        # If agent is COMANAV, replace CMA CGM logo with COMANAV logo
-        if (data.agent or '').upper() == 'COMANAV' and ws._images:
+    if not arrival_event:
+        last_alert = prev.get("last_alert_utc")
+        if last_alert:
             try:
-                comanav_url = 'https://asmahri2-afk.github.io/test/logo-comanav.png'
-                async with httpx.AsyncClient(timeout=10) as client:
-                    logo_resp = await client.get(comanav_url)
-                    logo_resp.raise_for_status()
-                    logo_bytes = logo_resp.content
+                last_alert_dt = datetime.fromisoformat(last_alert)
+                mins_since = (datetime.now(timezone.utc) - last_alert_dt).total_seconds() / 60
+                if mins_since < ALERT_COOLDOWN_MIN:
+                    logger.info(f"Cooldown active for {imo} ({mins_since:.0f} min since last alert)")
+                    return None, new_state
+            except Exception:
+                pass
 
-                # Swap image data directly on existing image object
-                # This preserves anchor, size and all positioning
-                old_img = ws._images[0]
-                old_img.ref = io.BytesIO(logo_bytes)
-                logger.info(f"Swapped logo to COMANAV ({len(logo_bytes)} bytes)")
+    if arrival_event:
+        status = "Arrived at destination area"
+    elif dest_changed:
+        status = "Destination changed"
+    else:
+        status = "Position / track updated"
+
+    extra        = f" (Δ {diff:.1f} NM)" if moved and diff is not None else ""
+    dest_display = f"{old_dest} ➜ {dest or 'N/A'}" if dest_changed and old_dest else (dest or "N/A")
+    dest_icon    = "🎯 Destination changed:" if dest_changed and old_dest else "🎯 Destination:"
+    dest_line    = f"{dest_icon} {dest_display}"
+    if dest_name and dest_dist is not None:
+        dest_line += f" (~{dest_dist:.1f} NM)"
+
+    msg = [
+        f"🚢 {name} (IMO {imo})",
+        f"📌 Status: {status}",
+        f"🕒 AIS: {age_txt}",
+        f"⚡ Speed: {sog:.1f} kn | 🧭 {cog_str}{extra}",
+        f"📍 Position: {lat:.4f}, {lon:.4f}",
+        f"⚓ Nearest port: {near_name or 'N/A'} (~{near_dist:.1f} NM)" if near_dist else "⚓ Nearest port: N/A",
+        dest_line
+    ]
+    if eta_text:
+        msg.append(f"⏱ ETA: {eta_text} ({eta_utc_str})")
+
+    new_state["last_alert_utc"] = datetime.now(timezone.utc).isoformat()
+    return "\n".join(msg), new_state
+
+# =============================================================================
+# RENDER COLD START WAIT (unchanged)
+# =============================================================================
+
+def wait_for_render(max_wait_sec: int = 90) -> bool:
+    logger.info("Waiting for Render API to be ready...")
+    interval = 10
+    for attempt in range(max_wait_sec // interval):
+        try:
+            r = requests.get(f"{RENDER_BASE}/ping", timeout=10)
+            if r.ok:
+                logger.info(f"Render ready after ~{attempt * interval}s")
+                return True
+        except Exception:
+            pass
+        logger.info(f"Render not ready yet, retrying in {interval}s...")
+        time.sleep(interval)
+    logger.error("Render did not become ready in time.")
+    return False
+
+# =============================================================================
+# MAIN — replaces file I/O with Supabase reads/writes
+# =============================================================================
+
+def main():
+    try:
+        if not wait_for_render():
+            send_whatsapp("⚠️ Vessel Tracker: Render API unavailable. Run skipped.")
+            return
+
+        # Load everything from Supabase
+        static_cache   = db_load_static_cache()
+        imos           = db_load_tracked_imos()
+        ports          = db_load_ports()
+        failure_counts = db_load_failure_counts()
+        prev_states    = db_load_vessels_state()
+
+        if not ports:
+            send_whatsapp("⚠️ Vessel Tracker: ports table empty. Run aborted.")
+            raise RuntimeError("ports table is empty")
+
+        logger.info(f"Tracking {len(imos)} vessels | {len(ports)} ports loaded")
+
+        for imo in imos:
+            imo = str(imo).strip()
+            if not validate_imo(imo):
+                logger.warning(f"Invalid IMO skipped: {imo}")
+                continue
+
+            fails = failure_counts.get(imo, 0)
+            if fails >= MAX_IMO_FAILURES:
+                logger.warning(f"IMO {imo} skipped after {fails} consecutive failures.")
+                continue
+
+            v_data = fetch_vessel_data(imo, static_cache)
+
+            if v_data.get("lat") is None and v_data.get("lon") is None:
+                failure_counts[imo] = fails + 1
+                db_save_failure_count(imo, failure_counts[imo])
+                if failure_counts[imo] == MAX_IMO_FAILURES:
+                    send_whatsapp(f"⚠️ Vessel Tracker: IMO {imo} failed {MAX_IMO_FAILURES} times in a row.")
+            else:
+                failure_counts[imo] = 0
+                db_save_failure_count(imo, 0)
+
+            alert, state = build_alert_and_state(v_data, ports, prev_states.get(imo), failure_counts)
+
+            # Save vessel state to Supabase
+            db_save_vessel(state)
+            logger.info(f"Saved: {state.get('name')} (IMO {imo})")
+
+            if alert:
+                logger.info(f"Alert triggered for {imo}:\n{alert}")
+                if CALLMEBOT_ENABLED:
+                    ok = send_whatsapp(alert)
+                    logger.info(f"Alert {'sent' if ok else 'FAILED'} for {imo}")
+                    time.sleep(1)
+
+        logger.info("Tracking run completed successfully.")
+
+        # ─────────────────────────────────────────────────────────────────────
+        # PER-USER CALLMEBOT ALERTS (multi-user support)
+        # ─────────────────────────────────────────────────────────────────────
+        logger.info("Checking per-user CallMeBot alerts...")
+
+        import urllib.parse as _urllib_parse
+
+        def _send_whatsapp_alert(phone: str, apikey: str, message: str):
+            """Send WhatsApp message via CallMeBot API for a specific user."""
+            try:
+                encoded_msg = _urllib_parse.quote(message)
+                url = f"https://api.callmebot.com/whatsapp.php?phone={_urllib_parse.quote(phone)}&text={encoded_msg}&apikey={_urllib_parse.quote(apikey)}"
+                r = requests.get(url, timeout=10)
+                logger.info(f"CallMeBot alert sent to {phone}: {r.status_code}")
             except Exception as e:
-                logger.warning(f"Logo swap failed (non-critical): {type(e).__name__}: {e}", exc_info=True)
+                logger.warning(f"CallMeBot alert failed for {phone}: {e}")
 
-        # Save to buffer
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
+        def _check_vessel_alerts(imo: str, current_data: dict, previous_data: dict) -> list:
+            """Check if vessel status changed and return alert messages."""
+            alerts = []
+            if not previous_data:
+                return alerts
 
-        vessel = (data.vessel or 'VESSEL').replace(' ', '_')
-        port = (data.port or 'PORT').replace(' ', '_')
-        date_str = datetime.now().strftime('%Y%m%d')
-        filename = f"SOF_{vessel}_{port}_{date_str}.xlsx"
+            prev_sog = float(previous_data.get('sog') or 0)
+            curr_sog = float(current_data.get('sog') or 0)
+            dest = (current_data.get('destination') or '').upper()
+            dest_dist = current_data.get('destination_distance_nm')
 
-        return Response(
-            content=buf.read(),
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
-        )
+            # Was moving, now stopped
+            if prev_sog > 0.5 and curr_sog <= 0.5:
+                name = current_data.get('name', f'IMO {imo}')
+                if dest_dist is not None and float(dest_dist) <= 30:
+                    alerts.append(f"⚓ {name} arrived at port near {dest or 'destination'}")
+                else:
+                    alerts.append(f"🔴 {name} has stopped (stalled)")
+
+            # Signal age check
+            last_pos = current_data.get('last_pos_utc')
+            if last_pos:
+                try:
+                    from datetime import datetime, timezone as _tz
+                    pos_time = datetime.fromisoformat(last_pos.replace(' UTC', '').replace('Z', ''))
+                    age_hours = (datetime.now(_tz.utc) - pos_time.replace(tzinfo=_tz.utc)).total_seconds() / 3600
+                    if age_hours > 6:
+                        name = current_data.get('name', f'IMO {imo}')
+                        alerts.append(f"📡 {name} signal lost — last seen {age_hours:.0f}h ago")
+                except Exception:
+                    pass
+
+            return alerts
+
+        try:
+            alert_users_res = sb.table('user_profiles')\
+                .select('id, username, callmebot_phone, callmebot_apikey')\
+                .eq('callmebot_enabled', True).execute()
+
+            for user in (alert_users_res.data or []):
+                if not user.get('callmebot_phone') or not user.get('callmebot_apikey'):
+                    continue
+
+                user_imos_res = sb.table('tracked_imos')\
+                    .select('imo')\
+                    .eq('user_id', user['id']).execute()
+
+                for row in (user_imos_res.data or []):
+                    imo = str(row['imo'])
+                    current_res = sb.table('vessels').select('*').eq('imo', imo).execute()
+                    if not current_res.data:
+                        continue
+
+                    vessel_data = current_res.data[0]
+                    user_alerts = _check_vessel_alerts(imo, vessel_data, prev_states.get(imo))
+
+                    for alert_msg in user_alerts:
+                        _send_whatsapp_alert(
+                            user['callmebot_phone'],
+                            user['callmebot_apikey'],
+                            f"🚢 VesselTracker Alert\n{alert_msg}"
+                        )
+                        time.sleep(1)
+
+        except Exception as e:
+            logger.warning(f"Per-user alert processing error: {e}")
 
     except Exception as e:
-        logger.error(f"SOF generation failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"SOF generation failed: {str(e)}")
+        logger.error(f"Fatal error in main: {e}", exc_info=True)
+        send_whatsapp(f"🚨 Vessel Tracker CRASHED: {str(e)[:200]}")
+
+if __name__ == "__main__":
+    main()
