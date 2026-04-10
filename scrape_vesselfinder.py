@@ -67,6 +67,7 @@ ARRIVAL_SOG_THRESHOLD = 1.0
 
 API_MAX_RETRIES        = 3
 API_RETRY_BACKOFF_BASE = 2.0
+API_TIMEOUT_SEC        = 120   # must be > scrape.do Super+Render worst case (~90s)
 MAX_IMO_FAILURES       = 5
 ALERT_COOLDOWN_MIN     = 45
 
@@ -277,7 +278,7 @@ def fetch_with_retry(url: str) -> Optional[Dict]:
         headers["X-API-Secret"] = API_SECRET
     for attempt in range(API_MAX_RETRIES):
         try:
-            r = requests.get(url, headers=headers, timeout=30)
+            r = requests.get(url, headers=headers, timeout=API_TIMEOUT_SEC)
             r.raise_for_status()
             return r.json()
         except Exception as e:
