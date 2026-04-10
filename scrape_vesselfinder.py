@@ -541,10 +541,7 @@ def main():
 
             if alert:
                 logger.info(f"Alert triggered for {imo}:\n{alert}")
-                if CALLMEBOT_ENABLED:
-                    ok = send_whatsapp(alert)
-                    logger.info(f"Alert {'sent' if ok else 'FAILED'} for {imo}")
-                    time.sleep(1)
+                # Vessel alerts sent per-user below — not globally
 
             # Cooldown after every BATCH_SIZE vessels (skip after last vessel)
             if processed % BATCH_SIZE == 0 and imo != imos[-1]:
