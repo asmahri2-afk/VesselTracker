@@ -67,8 +67,10 @@ ARRIVAL_SOG_THRESHOLD = 1.0
 
 API_MAX_RETRIES        = 3
 API_RETRY_BACKOFF_BASE = 2.0
-API_TIMEOUT_SEC        = 120   # must be > scrape.do Super+Render worst case (~90s)
+API_TIMEOUT_SEC        = 120
 MAX_IMO_FAILURES       = 5
+BATCH_SIZE             = 5    # pause after every N vessels
+BATCH_COOLDOWN_SEC     = 30   # seconds to wait between batches
 ALERT_COOLDOWN_MIN     = 45
 
 # =============================================================================
@@ -505,8 +507,9 @@ def main():
             send_whatsapp("⚠️ Vessel Tracker: ports table empty. Run aborted.")
             raise RuntimeError("ports table is empty")
 
-        logger.info(f"Tracking {len(imos)} vessels | {len(ports)} ports loaded")
+        logger.info(f"Tracking {len(imos)} vessels | {len(ports)} ports loaded | batch_size={BATCH_SIZE} cooldown={BATCH_COOLDOWN_SEC}s")
 
+        processed = 0
         for imo in imos:
             imo = str(imo).strip()
             if not validate_imo(imo):
@@ -519,6 +522,7 @@ def main():
                 continue
 
             v_data = fetch_vessel_data(imo, static_cache)
+            processed += 1
 
             if v_data.get("lat") is None and v_data.get("lon") is None:
                 failure_counts[imo] = fails + 1
@@ -541,6 +545,11 @@ def main():
                     ok = send_whatsapp(alert)
                     logger.info(f"Alert {'sent' if ok else 'FAILED'} for {imo}")
                     time.sleep(1)
+
+            # Cooldown after every BATCH_SIZE vessels (skip after last vessel)
+            if processed % BATCH_SIZE == 0 and imo != imos[-1]:
+                logger.info(f"Batch cooldown after {processed} vessels — sleeping {BATCH_COOLDOWN_SEC}s...")
+                time.sleep(BATCH_COOLDOWN_SEC)
 
         logger.info("Tracking run completed successfully.")
 
