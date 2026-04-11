@@ -1,8 +1,8 @@
 name: Update vessels data
 
 on:
-   schedule:
-     - cron: "0 5-22 * * *"
+  schedule:
+    - cron: "0 5-22 * * *"
   workflow_dispatch:
     inputs:
       reason:
