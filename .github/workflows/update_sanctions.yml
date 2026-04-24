@@ -1,0 +1,159 @@
+name: Update Sanctions List
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch, Parse & Sync Sanctions
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - << 'PYEOF'
+          import urllib.request, csv, json, re, io, os, xml.etree.ElementTree as ET
+          from datetime import datetime, timezone
+          from collections import Counter
+
+          entries = {}
+
+          def add(imo, name, lst, program=""):
+              imo = re.sub(r'\D', '', str(imo))
+              if len(imo) != 7:
+                  return
+              if imo not in entries:
+                  entries[imo] = {"imo": imo, "name": name, "lists": [], "program": program}
+              if lst not in entries[imo]["lists"]:
+                  entries[imo]["lists"].append(lst)
+
+          DATASET_MAP = [
+              ("US OFAC",        "OFAC"),
+              ("EU ",            "EU"),
+              ("UK ",            "UK"),
+              ("United Kingdom", "UK"),
+              ("UN ",            "UN"),
+              ("United Nations", "UN"),
+              ("Australian",     "Australia"),
+              ("Canadian",       "Canada"),
+              ("Swiss",          "Switzerland"),
+              ("Japan",          "Japan"),
+              ("Ukraine",        "Ukraine"),
+              ("us_ofac",        "OFAC"),
+              ("eu_",            "EU"),
+              ("gb_",            "UK"),
+              ("un_",            "UN"),
+              ("au_",            "Australia"),
+              ("ca_",            "Canada"),
+          ]
+
+          def datasets_to_lists(datasets_str):
+              matched = set()
+              result = []
+              for ds in re.split(r'[\t;]+', datasets_str):
+                  ds = ds.strip()
+                  if not ds: continue
+                  for substring, label in DATASET_MAP:
+                      if substring.lower() in ds.lower() and label not in matched:
+                          result.append(label)
+                          matched.add(label)
+                          break
+              return result or ["Sanctions"]
+
+          # 1. Fetch OpenSanctions
+          print("Fetching OpenSanctions CSV...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://data.opensanctions.org/datasets/latest/sanctions/targets.simple.csv",
+                  headers={"User-Agent": "VesselTracker-GH-Action/1.0"}
+              )
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  raw = r.read().decode("utf-8")
+              reader = csv.DictReader(io.StringIO(raw))
+              for row in reader:
+                  schema = row.get("schema", "")
+                  if not any(s in schema.lower() for s in ("vessel", "ship")): continue
+                  imo_val = ""
+                  identifiers = row.get("identifiers", "") or ""
+                  m = re.search(r'imo:(\d{7})', identifiers, re.I)
+                  if m: imo_val = m.group(1)
+                  if not imo_val:
+                      for part in re.split(r'[;,\s]+', identifiers):
+                          digits = re.sub(r'\D', '', part)
+                          if len(digits) == 7:
+                              imo_val = digits
+                              break
+                  if not imo_val:
+                      for col in ("name", "sanctions", "aliases"):
+                          m2 = re.search(r'\b(\d{7})\b', row.get(col, "") or "")
+                          if m2:
+                              imo_val = m2.group(1)
+                              break
+                  if not imo_val: continue
+                  name = (row.get("name") or "").split(";")[0].strip()
+                  lists = datasets_to_lists(row.get("dataset", ""))
+                  for lst in lists:
+                      add(imo_val, name, lst)
+          except Exception as ex:
+              print(f"  OpenSanctions failed: {ex}")
+
+          # 2. Fetch OFAC SDN
+          print("Fetching OFAC SDN XML...", flush=True)
+          try:
+              req = urllib.request.Request(
+                  "https://www.treasury.gov/ofac/downloads/sdn.xml",
+                  headers={"User-Agent": "Mozilla/5.0"}
+              )
+              with urllib.request.urlopen(req, timeout=90) as r:
+                  tree = ET.parse(r)
+              root = tree.getroot()
+              sdn_entries = root.findall(".//{*}sdnEntry") or root.findall(".//sdnEntry")
+              for e in sdn_entries:
+                  stype = (e.findtext("{*}sdnType") or e.findtext("sdnType") or "").strip()
+                  if stype not in ("Vessel", "Entity"): continue
+                  name = (e.findtext("{*}lastName") or e.findtext("lastName") or "").strip()
+                  prog = next((p.text for p in e.iter() if p.tag.endswith("program") and p.text), "SDN")
+                  for id_el in e.iter():
+                      if not id_el.tag.endswith("id"): continue
+                      id_type, id_num = "", ""
+                      for child in id_el:
+                          tag = child.tag.split("}")[-1]
+                          if tag == "idType": id_type = (child.text or "").lower()
+                          elif tag == "idNumber": id_num = child.text or ""
+                      if "imo" in id_type or "vessel" in id_type:
+                          add(id_num, name, "OFAC", prog)
+          except Exception as ex:
+              print(f"  OFAC direct failed: {ex}")
+
+          # 3. Sync to Supabase
+          output_data = sorted(entries.values(), key=lambda x: x["imo"])
+          print(f"Syncing {len(output_data)} vessels to Supabase...", flush=True)
+          sb_url = os.environ.get("SUPABASE_URL")
+          sb_key = os.environ.get("SUPABASE_SERVICE_KEY")
+
+          if sb_url and sb_key:
+              req_sb = urllib.request.Request(
+                  f"{sb_url}/rest/v1/sanctioned_imos",
+                  data=json.dumps(output_data).encode("utf-8"),
+                  headers={
+                      "apikey": sb_key,
+                      "Authorization": f"Bearer {sb_key}",
+                      "Content-Type": "application/json",
+                      "Prefer": "resolution=merge-duplicates"
+                  },
+                  method="POST"
+              )
+              try:
+                  with urllib.request.urlopen(req_sb, timeout=60) as response:
+                      print(f"  Supabase sync successful: Status {response.status}")
+              except Exception as e:
+                  print(f"  Supabase sync failed: {e}")
+          else:
+              print("  Error: Supabase credentials missing in Environment Secrets.")
+
+          print(f"\n=== DONE: {len(entries)} total unique sanctioned vessels ===")
+          PYEOF
