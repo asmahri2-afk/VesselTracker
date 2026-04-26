@@ -812,29 +812,20 @@ def main():
                     imo_to_users[imo_str].add(uid)
 
                 # Send push per IMO (each vessel alert → all users tracking it)
-                for imo, user_id_set in imo_to_users.items():
-                    alert_msg = alerts_by_imo[imo]
-                    # Extract vessel name from the first line of the alert message
-                    first_line = alert_msg.split('\n')[0] if alert_msg else ''
-                    # Extract status from second line
-                    status_line = alert_msg.split('\n')[1] if len(alert_msg.split('\n')) > 1 else ''
-                    status_text = status_line.replace('📌 Status: ', '') if '📌 Status:' in status_line else ''
-
-                    title = first_line  # e.g. "🚢 CHALLAH (IMO 9933913)"
-                    body = status_text   # e.g. "Arrived at destination area"
-                    # Add destination info if present
-                    for line in alert_msg.split('\n'):
-                        if '🎯' in line:
-                            body += f"\n{line}"
-                            break
-
-                    send_push_via_worker(
-                        user_ids=list(user_id_set),
-                        title=title,
-                        body=body,
-                        imo=imo,
-                        alert_type="vessel_alert",
-                    )
+              for imo, user_id_set in imo_to_users.items():
+                  alert_msg = alerts_by_imo[imo]
+                  # Use the first line as the push notification title
+                  title = alert_msg.split('\n')[0] if alert_msg else 'Vessel Alert'
+                  # Use the whole message as the body (preserving line breaks)
+                  body = alert_msg
+              
+                  send_push_via_worker(
+                      user_ids=list(user_id_set),
+                      title=title,
+                      body=body,
+                      imo=imo,
+                      alert_type="vessel_alert",
+                  )
 
             except Exception as e:
                 logger.warning(f"Per-user push alert processing error: {e}")
