@@ -53,6 +53,7 @@ CALLMEBOT_API_URL = "https://api.callmebot.com/whatsapp.php"
 
 RENDER_BASE = os.getenv("RENDER_BASE")
 API_SECRET  = os.getenv("API_SECRET", "")
+WORKER_URL  = os.getenv("WORKER_URL", "https://vesseltracker.asmahri1.workers.dev")
 
 # =============================================================================
 # TRACKING THRESHOLDS (unchanged)
@@ -267,18 +268,36 @@ def humanize_eta(h: float) -> str:
 # =============================================================================
 
 def send_whatsapp(text: str) -> bool:
-    if not CALLMEBOT_ENABLED:
-        return False
+    """Send admin alert via WhatsApp AND push notification."""
+    sent = False
+    if CALLMEBOT_ENABLED:
+        try:
+            r = requests.get(CALLMEBOT_API_URL, params={
+                "phone": CALLMEBOT_PHONE,
+                "apikey": CALLMEBOT_APIKEY,
+                "text": text
+            }, timeout=15)
+            sent = r.status_code == 200
+        except Exception as e:
+            logger.error(f"WhatsApp send failed: {e}")
+
+    # Also send push to admin via Worker (worker looks up asmahri's user_id)
     try:
-        r = requests.get(CALLMEBOT_API_URL, params={
-            "phone": CALLMEBOT_PHONE,
-            "apikey": CALLMEBOT_APIKEY,
-            "text": text
-        }, timeout=15)
-        return r.status_code == 200
+        if WORKER_URL and API_SECRET:
+            # Get admin user_id from Supabase
+            admin_res = sb.table('user_profiles')\
+                .select('id').eq('username', 'asmahri').execute()
+            if admin_res.data:
+                send_push_via_worker(
+                    user_ids=admin_res.data[0]['id'],
+                    title='🚢 VesselTracker Admin',
+                    body=text[:200],
+                    alert_type='admin',
+                )
     except Exception as e:
-        logger.error(f"WhatsApp send failed: {e}")
-        return False
+        logger.warning(f"Admin push failed: {e}")
+
+    return sent
 
 # =============================================================================
 # PORT AND ETA LOGIC (unchanged)
@@ -707,9 +726,41 @@ def main():
                 logger.info(f"CallMeBot sent to {phone}: HTTP {r.status_code}")
             except Exception as e:
                 logger.warning(f"CallMeBot failed for {phone}: {e}")
+            
+              def send_push_via_worker(user_ids, title: str, body: str, imo: str = None, alert_type: str = "alert"):
+    """Send push notification to one or more users via Cloudflare Worker /push/send."""
+    if not WORKER_URL or not API_SECRET:
+        return
+    if isinstance(user_ids, str):
+        user_ids = [user_ids]
+    if not user_ids:
+        return
+    try:
+        payload = {
+            "user_ids": user_ids,
+            "title": title,
+            "body": body,
+            "tag": f"vt-{imo or 'system'}-{int(time.time())}",
+            "imo": imo,
+            "type": alert_type,
+        }
+        r = requests.post(
+            f"{WORKER_URL}/push/send",
+            json=payload,
+            headers={"X-API-Secret": API_SECRET, "Content-Type": "application/json"},
+            timeout=15,
+        )
+        if r.ok:
+            data = r.json()
+            logger.info(f"Push: {data.get('sent', 0)} delivered, {data.get('failed', 0)} failed to {len(user_ids)} user(s)")
+        else:
+            logger.warning(f"Push send failed: HTTP {r.status_code}")
+    except Exception as e:
+        logger.warning(f"Push send error: {e}")
 
-        if alerts_by_imo:
+if alerts_by_imo:
             try:
+                # ── WhatsApp alerts (CallMeBot — existing behavior, unchanged) ──
                 alert_users_res = sb.table('user_profiles')\
                     .select('id, username, callmebot_phone, callmebot_apikey')\
                     .eq('callmebot_enabled', True).execute()
@@ -736,7 +787,54 @@ def main():
                         time.sleep(1)
 
             except Exception as e:
-                logger.warning(f"Per-user alert processing error: {e}")
+                logger.warning(f"Per-user WhatsApp alert processing error: {e}")
+
+            # ── Push notifications (all users, independent of CallMeBot) ──────
+            try:
+                alert_imo_list = list(alerts_by_imo.keys())
+                # Get ALL users who track any alerting vessel
+                tracked_res = sb.table('tracked_imos')\
+                    .select('imo, user_id')\
+                    .in_('imo', alert_imo_list).execute()
+
+                # Group by IMO → set of user_ids
+                imo_to_users = {}
+                for row in (tracked_res.data or []):
+                    uid = row.get('user_id')
+                    if not uid:
+                        continue
+                    imo_str = str(row['imo'])
+                    if imo_str not in imo_to_users:
+                        imo_to_users[imo_str] = set()
+                    imo_to_users[imo_str].add(uid)
+
+                # Send push per IMO (each vessel alert → all users tracking it)
+                for imo, user_id_set in imo_to_users.items():
+                    alert_msg = alerts_by_imo[imo]
+                    # Extract vessel name from the first line of the alert message
+                    first_line = alert_msg.split('\n')[0] if alert_msg else ''
+                    # Extract status from second line
+                    status_line = alert_msg.split('\n')[1] if len(alert_msg.split('\n')) > 1 else ''
+                    status_text = status_line.replace('📌 Status: ', '') if '📌 Status:' in status_line else ''
+
+                    title = first_line  # e.g. "🚢 CHALLAH (IMO 9933913)"
+                    body = status_text   # e.g. "Arrived at destination area"
+                    # Add destination info if present
+                    for line in alert_msg.split('\n'):
+                        if '🎯' in line:
+                            body += f"\n{line}"
+                            break
+
+                    send_push_via_worker(
+                        user_ids=list(user_id_set),
+                        title=title,
+                        body=body,
+                        imo=imo,
+                        alert_type="vessel_alert",
+                    )
+
+            except Exception as e:
+                logger.warning(f"Per-user push alert processing error: {e}")
 
     except Exception as e:
         logger.error(f"Fatal error in main: {e}", exc_info=True)
