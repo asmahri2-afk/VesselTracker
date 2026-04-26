@@ -9,7 +9,8 @@ Changes from original:
   - Removed: local file paths
   - Added: Supabase client for all reads and writes
   - Added: port calls refresh pass (post-loop, piggy-backed on MST HTML scrape)
-  - Everything else: 100% identical to original
+  - Added: per-user push notifications (via Cloudflare Worker)
+  - Everything else: 100% identical to original tracking logic
 """
 
 import logging
@@ -154,7 +155,6 @@ def _apply_port_calls_cap(imo: str, cap: int = 7):
     except Exception as e:
         logger.warning(f"_apply_port_calls_cap failed for IMO {imo}: {e}")
 
-
 def db_save_port_calls(imo: str, calls: List[Dict]) -> bool:
     """
     Replace MST rows for this IMO with fresh scraper data.
@@ -182,7 +182,11 @@ def db_save_port_calls(imo: str, calls: List[Dict]) -> bool:
         # Insert new rows first — if this fails, old data is still intact
         sb.table("port_calls").insert(rows).execute()
         # Delete previous MST rows only (manual rows untouched)
-        sb.table("port_calls").delete()            .eq("imo", imo)            .eq("is_manual", False)            .neq("updated_at", now)            .execute()
+        sb.table("port_calls").delete()\
+            .eq("imo", imo)\
+            .eq("is_manual", False)\
+            .neq("updated_at", now)\
+            .execute()
         # Enforce 7-row cap across all rows (MST + manual)
         _apply_port_calls_cap(imo)
         logger.info(f"IMO {imo}: {len(rows)} MST port call(s) saved (manual entries preserved)")
@@ -264,7 +268,7 @@ def humanize_eta(h: float) -> str:
     return f"{d}d {rh}h" if rh else f"{d}d"
 
 # =============================================================================
-# PUSH HELPER (module-level, called from send_whatsapp and main)
+# PUSH HELPER (module‑level, used by send_whatsapp and main)
 # =============================================================================
 
 def send_push_via_worker(user_ids, title: str, body: str, imo: str = None, alert_type: str = "alert"):
@@ -683,8 +687,7 @@ def main():
             db_save_vessel(state)
             logger.info(f"Saved: {state.get('name')} (IMO {imo})")
 
-            # If vessel-full response included port calls (Tier 3 HTML scrape fired on
-            # Render), save them now.  This avoids a second MST HTTP request later.
+            # Save port calls if already present from vessel-full response
             if v_data.get("port_calls"):
                 db_save_port_calls(imo, v_data["port_calls"])
                 logger.info(f"IMO {imo}: port calls saved from vessel-full response ({len(v_data['port_calls'])} entries)")
@@ -702,15 +705,6 @@ def main():
 
         # ─────────────────────────────────────────────────────────────────────
         # PORT CALLS — refresh stale entries (post-loop)
-        #
-        # How this avoids double-fetching MST:
-        #   • If Tier 3 HTML scrape fired during vessel-full, port calls were
-        #     already saved above.  db_get_port_calls_age_days() will return a
-        #     very small value → we skip → no extra HTTP request.
-        #   • If Tier 1 or Tier 2 handled position (no HTML fetch), port calls
-        #     are stale → we call /port-calls/{imo} on Render, which fetches the
-        #     MST HTML page exactly once and returns both pos data (ignored) and
-        #     port calls.  We then save them here.
         # ─────────────────────────────────────────────────────────────────────
         logger.info("Starting port calls refresh pass...")
         for imo in imos:
@@ -739,7 +733,7 @@ def main():
             time.sleep(3)   # polite delay between vessels
 
         # ─────────────────────────────────────────────────────────────────────
-        # PER-USER CALLMEBOT ALERTS (multi-user support)
+        # PER-USER ALERTS (WhatsApp + Push)
         # ─────────────────────────────────────────────────────────────────────
         if not alerts_by_imo:
             logger.info("No alerts this run — skipping per-user dispatch.")
@@ -811,21 +805,21 @@ def main():
                         imo_to_users[imo_str] = set()
                     imo_to_users[imo_str].add(uid)
 
-                # Send push per IMO (each vessel alert → all users tracking it)
-              for imo, user_id_set in imo_to_users.items():
-                  alert_msg = alerts_by_imo[imo]
-                  # Use the first line as the push notification title
-                  title = alert_msg.split('\n')[0] if alert_msg else 'Vessel Alert'
-                  # Use the whole message as the body (preserving line breaks)
-                  body = alert_msg
-              
-                  send_push_via_worker(
-                      user_ids=list(user_id_set),
-                      title=title,
-                      body=body,
-                      imo=imo,
-                      alert_type="vessel_alert",
-                  )
+                # Send full push notification (same content as WhatsApp)
+                for imo, user_id_set in imo_to_users.items():
+                    alert_msg = alerts_by_imo[imo]
+                    # Use the first line as the push notification title
+                    title = alert_msg.split('\n')[0] if alert_msg else 'Vessel Alert'
+                    # Use the whole message as the body
+                    body = alert_msg
+
+                    send_push_via_worker(
+                        user_ids=list(user_id_set),
+                        title=title,
+                        body=body,
+                        imo=imo,
+                        alert_type="vessel_alert",
+                    )
 
             except Exception as e:
                 logger.warning(f"Per-user push alert processing error: {e}")
