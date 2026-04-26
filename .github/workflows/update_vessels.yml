@@ -42,6 +42,7 @@ jobs:
           API_SECRET: ${{ secrets.API_SECRET }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
         run: python scrape_vesselfinder.py
 
       - name: Notify on failure
