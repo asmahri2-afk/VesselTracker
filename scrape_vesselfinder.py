@@ -264,7 +264,42 @@ def humanize_eta(h: float) -> str:
     return f"{d}d {rh}h" if rh else f"{d}d"
 
 # =============================================================================
-# WHATSAPP (unchanged)
+# PUSH HELPER (module-level, called from send_whatsapp and main)
+# =============================================================================
+
+def send_push_via_worker(user_ids, title: str, body: str, imo: str = None, alert_type: str = "alert"):
+    """Send push notification to one or more users via Cloudflare Worker /push/send."""
+    if not WORKER_URL or not API_SECRET:
+        return
+    if isinstance(user_ids, str):
+        user_ids = [user_ids]
+    if not user_ids:
+        return
+    try:
+        payload = {
+            "user_ids": user_ids,
+            "title": title,
+            "body": body,
+            "tag": f"vt-{imo or 'system'}-{int(time.time())}",
+            "imo": imo,
+            "type": alert_type,
+        }
+        r = requests.post(
+            f"{WORKER_URL}/push/send",
+            json=payload,
+            headers={"X-API-Secret": API_SECRET, "Content-Type": "application/json"},
+            timeout=15,
+        )
+        if r.ok:
+            data = r.json()
+            logger.info(f"Push: {data.get('sent', 0)} delivered, {data.get('failed', 0)} failed to {len(user_ids)} user(s)")
+        else:
+            logger.warning(f"Push send failed: HTTP {r.status_code}")
+    except Exception as e:
+        logger.warning(f"Push send error: {e}")
+
+# =============================================================================
+# WHATSAPP (unchanged, now also sends push to admin)
 # =============================================================================
 
 def send_whatsapp(text: str) -> bool:
@@ -711,56 +746,24 @@ def main():
         else:
             logger.info(f"Dispatching alerts for {len(alerts_by_imo)} vessel(s) to subscribed users...")
 
-        import urllib.parse as _urllib_parse
+            import urllib.parse as _urllib_parse
 
-        def _send_whatsapp_alert(phone: str, apikey: str, message: str):
-            try:
-                encoded_msg = _urllib_parse.quote(message)
-                url = (
-                    f"https://api.callmebot.com/whatsapp.php"
-                    f"?phone={_urllib_parse.quote(phone)}"
-                    f"&text={encoded_msg}"
-                    f"&apikey={_urllib_parse.quote(apikey)}"
-                )
-                r = requests.get(url, timeout=10)
-                logger.info(f"CallMeBot sent to {phone}: HTTP {r.status_code}")
-            except Exception as e:
-                logger.warning(f"CallMeBot failed for {phone}: {e}")
-            
-              def send_push_via_worker(user_ids, title: str, body: str, imo: str = None, alert_type: str = "alert"):
-    """Send push notification to one or more users via Cloudflare Worker /push/send."""
-    if not WORKER_URL or not API_SECRET:
-        return
-    if isinstance(user_ids, str):
-        user_ids = [user_ids]
-    if not user_ids:
-        return
-    try:
-        payload = {
-            "user_ids": user_ids,
-            "title": title,
-            "body": body,
-            "tag": f"vt-{imo or 'system'}-{int(time.time())}",
-            "imo": imo,
-            "type": alert_type,
-        }
-        r = requests.post(
-            f"{WORKER_URL}/push/send",
-            json=payload,
-            headers={"X-API-Secret": API_SECRET, "Content-Type": "application/json"},
-            timeout=15,
-        )
-        if r.ok:
-            data = r.json()
-            logger.info(f"Push: {data.get('sent', 0)} delivered, {data.get('failed', 0)} failed to {len(user_ids)} user(s)")
-        else:
-            logger.warning(f"Push send failed: HTTP {r.status_code}")
-    except Exception as e:
-        logger.warning(f"Push send error: {e}")
+            def _send_whatsapp_alert(phone: str, apikey: str, message: str):
+                try:
+                    encoded_msg = _urllib_parse.quote(message)
+                    url = (
+                        f"https://api.callmebot.com/whatsapp.php"
+                        f"?phone={_urllib_parse.quote(phone)}"
+                        f"&text={encoded_msg}"
+                        f"&apikey={_urllib_parse.quote(apikey)}"
+                    )
+                    r = requests.get(url, timeout=10)
+                    logger.info(f"CallMeBot sent to {phone}: HTTP {r.status_code}")
+                except Exception as e:
+                    logger.warning(f"CallMeBot failed for {phone}: {e}")
 
-if alerts_by_imo:
+            # ── WhatsApp alerts (CallMeBot — existing behavior, unchanged) ──
             try:
-                # ── WhatsApp alerts (CallMeBot — existing behavior, unchanged) ──
                 alert_users_res = sb.table('user_profiles')\
                     .select('id, username, callmebot_phone, callmebot_apikey')\
                     .eq('callmebot_enabled', True).execute()
