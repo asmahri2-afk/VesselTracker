@@ -32,7 +32,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 BATCH_SIZE   = 3     # Equasis requests per minute
 BATCH_DELAY  = 60    # seconds between batches
-CACHE_DAYS   = 30    # days before a complete record is considered stale
+CACHE_DAYS   = 182    # days before a complete record is considered stale
 REQUEST_GAP  = 2     # seconds between individual requests within a batch
 
 # Fields we get from Equasis — used for merge logic
