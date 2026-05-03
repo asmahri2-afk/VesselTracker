@@ -441,6 +441,7 @@ def fetch_vessel_data(imo: str, static_cache: Dict) -> Dict:
         result["ship_type"]   = (api_data.get("ship_type") or result.get("ship_type") or "").strip()
         result["flag"]        = (api_data.get("flag") or result.get("flag") or "").strip()
         result["mmsi"]        = api_data.get("mmsi") or result.get("mmsi")
+        result["ais_source"]  = api_data.get("ais_source")  # which provider won the selector (vesselfinder|myshiptracking_*|hifleet)
 
         static_keys = ["mmsi", "deadweight_t", "gross_tonnage", "year_of_build", "length_overall_m", "beam_m", "draught_m"]
         for key in static_keys:
@@ -489,6 +490,7 @@ def build_alert_and_state(
         "year_of_build": v.get("year_of_build"), "length_overall_m": v.get("length_overall_m"),
         "beam_m": v.get("beam_m"), "draught_m": v.get("draught_m"),
         "last_alert_utc": prev.get("last_alert_utc") if prev else None,
+        "ais_source": v.get("ais_source"),
     }
 
     if lat is None or lon is None:
