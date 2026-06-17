@@ -634,6 +634,8 @@ def wait_for_render(max_wait_sec: int = 30) -> bool:
 # =============================================================================
 
 def main():
+  logger.info(f"API_SECRET present: {bool(API_SECRET)} | WORKER_URL: {WORKER_URL}")
+        logger.info(f"API_SECRET value (first 4 chars): {API_SECRET[:4] if API_SECRET else 'EMPTY'}")
     try:
         if not wait_for_render():
             send_whatsapp("⚠️ Vessel Tracker: Render API unavailable. Run skipped.")
