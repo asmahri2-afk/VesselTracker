@@ -32,8 +32,8 @@ API_SECRET   = os.getenv("API_SECRET", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
-BATCH_SIZE   = 3     # Equasis requests per minute
-BATCH_DELAY  = 60    # seconds between batches
+BATCH_SIZE   = 10     # Equasis requests per minute
+BATCH_DELAY  = 30    # seconds between batches
 CACHE_DAYS   = 182    # days before a complete record is considered stale
 REQUEST_GAP  = 2     # seconds between individual requests within a batch
 
