@@ -4,6 +4,8 @@ magicport_enricher.py
 Scrape vessel-at-port data from magicport.ai for all ports listed
 in ports.txt and upsert into Supabase static_vessel_cache.
 
+Uses curl_cffi to bypass Cloudflare + extracts Laravel CSRF token from homepage.
+
 Env:
     SUPABASE_URL
     SUPABASE_SERVICE_KEY  (or SUPABASE_KEY)
@@ -16,7 +18,6 @@ import os
 import re
 import sys
 import time
-import requests
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
@@ -27,8 +28,8 @@ from typing import Optional, List, Dict, Any
 PORTS_FILE   = "/mnt/agents/upload/ports.txt"   # fallback path
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-REQUEST_DELAY = 1.5   # seconds between port requests
-VESSEL_DELAY  = 0.2   # seconds between individual vessel upserts (optional)
+REQUEST_DELAY = 1.0   # seconds between port requests
+VESSEL_DELAY  = 0.1   # seconds between individual vessel upserts
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ISO 3166-1 alpha-2 → full country name
@@ -126,20 +127,64 @@ def extract_mmsi(route: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def fetch_port_vessels(port_url: str) -> List[Dict[str, Any]]:
-    """GET /vessel-at-port/ and return list of vessel dicts."""
-    url = port_url.rstrip("/") + "/vessel-at-port/"
+def get_csrf_token(session) -> Optional[str]:
+    """Fetch magicport.ai homepage to obtain session cookies + CSRF token."""
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept": "application/json",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
         "Referer": "https://magicport.ai/",
+    }
+    try:
+        r = session.get("https://magicport.ai/", headers=headers, timeout=30)
+        r.raise_for_status()
+        html = r.text
+
+        # Pattern 1: <meta name="csrf-token" content="...">
+        m = re.search(r'<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']', html, re.IGNORECASE)
+        if not m:
+            # Pattern 2: <meta content="..." name="csrf-token">
+            m = re.search(r'<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']', html, re.IGNORECASE)
+        if not m:
+            # Pattern 3: JSON embedded in page
+            m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
+        if m:
+            token = m.group(1)
+            log("INFO", f"CSRF token obtained: {token[:20]}...")
+            return token
+        log("WARNING", "CSRF token not found in homepage HTML")
+    except Exception as e:
+        log("WARNING", f"Failed to fetch homepage for CSRF: {e}")
+    return None
+
+
+def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str, Any]]:
+    """POST /vessel-at-port/ using shared session + CSRF token."""
+    url = port_url.rstrip("/") + "/vessel-at-port"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/json",
+        "Origin": "https://magicport.ai",
+        "Referer": port_url.rstrip("/") + "/",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRF-Token": csrf_token,
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
     }
     for attempt in range(3):
         try:
-            r = requests.get(url, headers=headers, timeout=30)
+            r = session.post(url, headers=headers, json={}, timeout=30)
             r.raise_for_status()
             data = r.json()
 
@@ -149,7 +194,6 @@ def fetch_port_vessels(port_url: str) -> List[Dict[str, Any]]:
                 for key in ("data", "vessels", "results", "items", "ships", "vessel"):
                     if key in data and isinstance(data[key], list):
                         return data[key]
-                # Single vessel object
                 if "imo" in data:
                     return [data]
             return []
@@ -202,9 +246,16 @@ def main():
         log("CRITICAL", "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
         sys.exit(1)
 
+    # Import curl_cffi (bypasses Cloudflare TLS fingerprinting)
+    try:
+        from curl_cffi import requests as curl_requests
+        log("INFO", "Using curl_cffi (Chrome impersonation)")
+    except ImportError:
+        log("CRITICAL", "curl_cffi is required. Install: pip install curl_cffi")
+        sys.exit(1)
+
     # Read ports file
     if not os.path.exists(PORTS_FILE):
-        # Try relative path
         alt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
         if os.path.exists(alt):
             ports_path = alt
@@ -219,13 +270,23 @@ def main():
 
     log("INFO", f"Loaded {len(ports)} ports from {ports_path}")
 
+    # Create session with Chrome impersonation
+    session = curl_requests.Session(impersonate="chrome120")
+
+    # Step 1: Hit homepage once to obtain session cookies + CSRF token
+    log("INFO", "Fetching magicport.ai homepage to obtain session cookies...")
+    csrf_token = get_csrf_token(session)
+    if not csrf_token:
+        log("CRITICAL", "Failed to obtain CSRF token. Cloudflare may be blocking.")
+        sys.exit(1)
+
     total_inserted = 0
     total_failed = 0
     total_skipped = 0
 
     for idx, port_url in enumerate(ports, 1):
-        log("INFO", f"[{idx}/{len(ports)}] Fetching {port_url} ...")
-        vessels = fetch_port_vessels(port_url)
+        log("INFO", f"[{idx}/{len(ports)}] {port_url}")
+        vessels = fetch_port_vessels(port_url, session, csrf_token)
 
         if not vessels:
             log("INFO", "  → 0 vessels")
@@ -241,13 +302,11 @@ def main():
                 continue
 
             imo = str(imo_raw).strip()
-            # Validate IMO: must be 7 digits
             if not re.match(r"^\d{7}$", imo):
                 log("DEBUG", f"  Skipping invalid IMO: {imo}")
                 total_skipped += 1
                 continue
 
-            # Build upsert row — only fields we have from magicport
             row: Dict[str, Any] = {"imo": imo}
 
             name = v.get("name")
@@ -276,7 +335,6 @@ def main():
             if mmsi:
                 row["mmsi"] = mmsi
 
-            # Cache timestamp
             row["cached_at"] = datetime.now(timezone.utc).isoformat()
 
             if upsert_vessel(row):
