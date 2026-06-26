@@ -1,8 +1,9 @@
 """
 equasis_enricher.py
 ───────────────────
-Daily job: fetch all A N P vessels, enrich missing/incomplete
-entries in Supabase static_vessel_cache via Oracle /equasis API.
+Daily job: fetch all A N P vessels + Rotterdam ship visits,
+enrich missing/incomplete entries in Supabase static_vessel_cache
+via Oracle /equasis API.
 
 Rules:
   - Skip IMOs already cached with equasis_owner set within CACHE_DAYS
@@ -25,6 +26,7 @@ from typing import Optional
 # ══════════════════════════════════════════════════════════════════════════════
 
 ANP_URL      = "https://www.anp.org.ma/_vti_bin/WS/Service.svc/mvmnv/all"
+ROTTERDAM_URL= "https://ats-api.portofrotterdam.com/api/ship-visits"
 RENDER_BASE  = os.getenv("RENDER_BASE", "").rstrip("/")
 API_SECRET   = os.getenv("API_SECRET", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -35,7 +37,7 @@ BATCH_DELAY  = 60    # seconds between batches
 CACHE_DAYS   = 182    # days before a complete record is considered stale
 REQUEST_GAP  = 2     # seconds between individual requests within a batch
 
-# Fields we get from Equasis — used for merge logic
+# Fields we get from Equasis / Rotterdam — used for merge logic
 EQUASIS_FIELDS = [
     "name", "flag", "ship_type", "mmsi", "call_sign",
     "gross_tonnage", "deadweight_t", "year_of_build",
@@ -57,6 +59,9 @@ def _safe_int(val) -> Optional[int]:
         return int(str(val).strip()) if val else None
     except Exception:
         return None
+
+def _safe_str(val) -> Optional[str]:
+    return str(val).strip() if val else None
 
 def _is_valid_imo(imo: str) -> bool:
     imo = str(imo).strip()
@@ -117,6 +122,64 @@ def extract_imos(vessels: list) -> list:
     return result
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ROTTERDAM — fetch ship visits
+# ══════════════════════════════════════════════════════════════════════════════
+
+def fetch_rotterdam_vessels() -> list:
+    """Fetch all vessel visits from Port of Rotterdam ATS API."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+        "Accept":     "application/json",
+        "Referer":    "https://ats-api.portofrotterdam.com/",
+    }
+    for attempt in range(3):
+        try:
+            log("INFO", f"Fetching Rotterdam data (attempt {attempt + 1}/3)...")
+            r = requests.get(ROTTERDAM_URL, headers=headers, timeout=(10, 60))
+            r.raise_for_status()
+            data = r.json()
+
+            # Rotterdam may return a list or a dict wrapping a list
+            if isinstance(data, list):
+                vessels = data
+            elif isinstance(data, dict):
+                vessels = None
+                for key in ("shipVisits", "data", "results", "vessels", "items"):
+                    if key in data and isinstance(data[key], list):
+                        vessels = data[key]
+                        break
+                if vessels is None:
+                    raise ValueError("Rotterdam response dict has no known list key")
+            else:
+                raise ValueError("Rotterdam response is not a list or dict")
+
+            log("INFO", f"Rotterdam returned {len(vessels)} vessel records")
+            return vessels
+        except Exception as e:
+            log("WARNING", f"Rotterdam fetch attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(5 * (2 ** attempt))
+    raise RuntimeError("Rotterdam fetch failed after 3 attempts")
+
+def normalize_rotterdam(vessel: dict) -> dict:
+    """Normalise Rotterdam JSON fields to our schema."""
+    return {
+        "imo":             _safe_str(vessel.get("imo")),
+        "mmsi":            _safe_str(vessel.get("mmsi")),
+        "name":            vessel.get("name") or None,
+        "call_sign":         vessel.get("call_sign") or None,
+        "gross_tonnage":   _safe_float(vessel.get("gross_tonnage")),
+        "deadweight_t":    _safe_float(vessel.get("deadweight")),
+        "flag":            vessel.get("flag_code") or None,
+        "year_of_build":   _safe_int(vessel.get("year_of_build")),
+        "ship_type":       None,  # Rotterdam does not provide this
+        "equasis_owner":   None,  # Rotterdam has "operator", not owner
+        "equasis_address": None,
+        "pi_club":         None,
+        "class_society":   None,
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — read cache
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -175,8 +238,8 @@ def is_complete(row: dict) -> bool:
 
 def needs_enrichment(row: dict) -> bool:
     """
-    Return True if the row has any gap that Equasis can fill:
-    missing owner, flag, ship_type, gross_tonnage, etc.
+    Return True if the row has any gap that Equasis / Rotterdam can fill:
+    missing owner, flag, ship_type, gross_tonnage, mmsi, etc.
     """
     if is_complete(row):
         return False
@@ -187,38 +250,49 @@ def needs_enrichment(row: dict) -> bool:
 # SUPABASE — write
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_upsert_row(imo: str, equasis_data: dict, existing_row: Optional[dict]) -> dict:
+def build_upsert_row(imo: str, equasis_data: Optional[dict], existing_row: Optional[dict], rotterdam_data: Optional[dict] = None) -> dict:
     """
     Build the row to upsert.
     Rule: never overwrite a field that already has a non-null value.
+    Priority: existing DB → Equasis → Rotterdam.
     Only fill gaps.
     """
     # Normalise Equasis response field names
-    eq = {
-        "name":            equasis_data.get("vessel_name") or equasis_data.get("name"),
-        "flag":            equasis_data.get("flag")         or equasis_data.get("Flag"),
-        "ship_type":       equasis_data.get("ship_type")    or equasis_data.get("Type of ship"),
-        "mmsi":            equasis_data.get("mmsi")         or equasis_data.get("MMSI"),
-        "call_sign":       equasis_data.get("call_sign")    or equasis_data.get("Call Sign"),
-        "gross_tonnage":   _safe_float(equasis_data.get("gross_tonnage") or equasis_data.get("Gross tonnage")),
-        "deadweight_t":    _safe_float(equasis_data.get("deadweight_t")  or equasis_data.get("DWT")),
-        "year_of_build":   _safe_int(equasis_data.get("year_of_build")   or equasis_data.get("Year of build")),
-        "equasis_owner":   equasis_data.get("equasis_owner"),
-        "equasis_address": equasis_data.get("equasis_address"),
-        "pi_club":         equasis_data.get("pi_club"),
-        "class_society":   equasis_data.get("class_society"),
-    }
+    eq = {}
+    if equasis_data:
+        eq = {
+            "name":            equasis_data.get("vessel_name") or equasis_data.get("name"),
+            "flag":            equasis_data.get("flag")         or equasis_data.get("Flag"),
+            "ship_type":       equasis_data.get("ship_type")    or equasis_data.get("Type of ship"),
+            "mmsi":            equasis_data.get("mmsi")         or equasis_data.get("MMSI"),
+            "call_sign":       equasis_data.get("call_sign")    or equasis_data.get("Call Sign"),
+            "gross_tonnage":   _safe_float(equasis_data.get("gross_tonnage") or equasis_data.get("Gross tonnage")),
+            "deadweight_t":    _safe_float(equasis_data.get("deadweight_t")  or equasis_data.get("DWT")),
+            "year_of_build":   _safe_int(equasis_data.get("year_of_build")   or equasis_data.get("Year of build")),
+            "equasis_owner":   equasis_data.get("equasis_owner"),
+            "equasis_address": equasis_data.get("equasis_address"),
+            "pi_club":         equasis_data.get("pi_club"),
+            "class_society":   equasis_data.get("class_society"),
+        }
+
+    rot = rotterdam_data or {}
 
     row = {"imo": str(imo), "equasis_updated": datetime.now(timezone.utc).isoformat()}
 
-    for field, eq_value in eq.items():
+    for field in EQUASIS_FIELDS:
         existing_value = (existing_row or {}).get(field)
+        eq_value = eq.get(field)
+        rot_value = rot.get(field)
+
         if existing_value:
             # Keep existing — never overwrite
             row[field] = existing_value
         elif eq_value is not None:
-            # Fill the gap
+            # Fill from Equasis
             row[field] = eq_value
+        elif rot_value is not None:
+            # Fill from Rotterdam
+            row[field] = rot_value
         # else: both null — omit to avoid overwriting with null
 
     return row
@@ -397,28 +471,53 @@ def main():
     print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 60)
 
-    # 1. Fetch all ANP vessels
+    # 1. Fetch ANP vessels
     try:
-        all_vessels = fetch_anp_vessels()
+        all_vessels_anp = fetch_anp_vessels()
     except RuntimeError as e:
         log("CRITICAL", str(e))
         sys.exit(1)
 
-    # 2. Extract valid IMOs
-    imos = extract_imos(all_vessels)
-    if not imos:
-        log("INFO", "No valid IMOs found — nothing to do")
+    # 2. Fetch Rotterdam vessels
+    try:
+        rotterdam_raw = fetch_rotterdam_vessels()
+    except RuntimeError as e:
+        log("WARNING", str(e))
+        rotterdam_raw = []
+
+    # Normalise Rotterdam data and index by IMO
+    rotterdam_by_imo = {}
+    for v in rotterdam_raw:
+        imo = _safe_str(v.get("imo"))
+        if imo and _is_valid_imo(imo):
+            rotterdam_by_imo[imo] = normalize_rotterdam(v)
+        else:
+            log("DEBUG", f"Skipping invalid Rotterdam IMO: '{imo}'")
+
+    # 3. Extract valid IMOs from both sources
+    imos_anp = extract_imos(all_vessels_anp)
+    imos_rot = list(rotterdam_by_imo.keys())
+    # Merge while preserving order and removing duplicates
+    seen = set()
+    all_imos = []
+    for imo in imos_anp + imos_rot:
+        if imo not in seen:
+            seen.add(imo)
+            all_imos.append(imo)
+
+    if not all_imos:
+        log("INFO", "No valid IMOs found from any source — nothing to do")
         return
 
-    # 3. Load current Supabase cache for these IMOs
-    cache = supabase_get_cache(imos)
+    # 4. Load current Supabase cache for these IMOs
+    cache = supabase_get_cache(all_imos)
 
-    # 4. Classify each IMO
+    # 5. Classify each IMO
     to_fetch   = []   # not in cache at all
     to_enrich  = []   # in cache but incomplete
     skip_count = 0
 
-    for imo in imos:
+    for imo in all_imos:
         row = cache.get(imo)
         if row is None:
             to_fetch.append((imo, None))
@@ -451,25 +550,30 @@ def main():
 
         for imo, existing_row in batch:
             eq_data = fetch_equasis(imo)
+            rot_data = rotterdam_by_imo.get(imo)
 
-            if eq_data is None:
+            if eq_data is None and rot_data is None:
                 skipped_no_data += 1
-                # Even if Equasis has nothing, mark it so we don't retry next run
+                # Even if both sources have nothing, mark timestamp so we don't retry next run
                 # unless it's a completely new record we couldn't find
                 if existing_row is not None:
-                    # Update timestamp to avoid re-querying too soon
                     supabase_upsert({
                         "imo": str(imo),
                         "equasis_updated": datetime.now(timezone.utc).isoformat(),
                     })
             else:
-                row = build_upsert_row(imo, eq_data, existing_row)
+                row = build_upsert_row(imo, eq_data, existing_row, rot_data)
                 if supabase_upsert(row):
-                    upsert_vessel_owner(imo, eq_data)
+                    if eq_data:
+                        upsert_vessel_owner(imo, eq_data)
                     done += 1
                     action = "inserted" if existing_row is None else "enriched"
+                    sources = []
+                    if eq_data: sources.append("Equasis")
+                    if rot_data: sources.append("Rotterdam")
+                    src_str = "+".join(sources) if sources else "—"
                     owner = row.get("equasis_owner", "—")
-                    log("OK", f"IMO {imo} ({row.get('name','?')}) {action} | owner: {owner}")
+                    log("OK", f"IMO {imo} ({row.get('name','?')}) {action} | src: {src_str} | owner: {owner}")
                 else:
                     failed += 1
 
@@ -482,7 +586,7 @@ def main():
             time.sleep(BATCH_DELAY)
 
     print("=" * 60)
-    log("DONE", f"Enriched: {done} | Not found on Equasis: {skipped_no_data} | Errors: {failed}")
+    log("DONE", f"Enriched: {done} | Not found: {skipped_no_data} | Errors: {failed}")
     print("=" * 60)
 
 if __name__ == "__main__":
