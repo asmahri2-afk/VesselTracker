@@ -126,7 +126,8 @@ def extract_imos(vessels: list) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_rotterdam_vessels() -> list:
-    """Fetch all vessel visits from Port of Rotterdam ATS API."""
+    """Fetch all vessel visits from Port of Rotterdam ATS API.
+    Returns a flat list of all vessels from Present + Departed + Expected."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
         "Accept":     "application/json",
@@ -139,19 +140,17 @@ def fetch_rotterdam_vessels() -> list:
             r.raise_for_status()
             data = r.json()
 
-            # Rotterdam may return a list or a dict wrapping a list
-            if isinstance(data, list):
-                vessels = data
-            elif isinstance(data, dict):
-                vessels = None
-                for key in ("shipVisits", "data", "results", "vessels", "items"):
-                    if key in data and isinstance(data[key], list):
-                        vessels = data[key]
-                        break
-                if vessels is None:
-                    raise ValueError("Rotterdam response dict has no known list key")
-            else:
-                raise ValueError("Rotterdam response is not a list or dict")
+            if not isinstance(data, dict):
+                raise ValueError(f"Rotterdam response is {type(data).__name__}, expected dict")
+
+            # Rotterdam returns {"Present": [...], "Departed": [...], "Expected": [...]}
+            vessels = []
+            for key in ("Present", "Departed", "Expected"):
+                if key in data and isinstance(data[key], list):
+                    vessels.extend(data[key])
+
+            if not vessels:
+                raise ValueError("Rotterdam response has no vessel lists under Present/Departed/Expected")
 
             log("INFO", f"Rotterdam returned {len(vessels)} vessel records")
             return vessels
@@ -167,7 +166,7 @@ def normalize_rotterdam(vessel: dict) -> dict:
         "imo":             _safe_str(vessel.get("imo")),
         "mmsi":            _safe_str(vessel.get("mmsi")),
         "name":            vessel.get("name") or None,
-        "call_sign":         vessel.get("call_sign") or None,
+        "call_sign":       vessel.get("call_sign") or None,
         "gross_tonnage":   _safe_float(vessel.get("gross_tonnage")),
         "deadweight_t":    _safe_float(vessel.get("deadweight")),
         "flag":            vessel.get("flag_code") or None,
