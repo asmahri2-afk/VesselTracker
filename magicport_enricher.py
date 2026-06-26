@@ -127,7 +127,7 @@ def extract_mmsi(route: Optional[str]) -> Optional[str]:
 
 
 def fetch_port_vessels(port_url: str) -> List[Dict[str, Any]]:
-    """POST to /vessel-at-port/ and return list of vessel dicts."""
+    """GET /vessel-at-port/ and return list of vessel dicts."""
     url = port_url.rstrip("/") + "/vessel-at-port/"
     headers = {
         "User-Agent": (
@@ -135,12 +135,11 @@ def fetch_port_vessels(port_url: str) -> List[Dict[str, Any]]:
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
         "Accept": "application/json",
-        "Content-Type": "application/json",
         "Referer": "https://magicport.ai/",
     }
     for attempt in range(3):
         try:
-            r = requests.post(url, headers=headers, timeout=30, json={})
+            r = requests.get(url, headers=headers, timeout=30)
             r.raise_for_status()
             data = r.json()
 
@@ -242,7 +241,7 @@ def main():
                 continue
 
             imo = str(imo_raw).strip()
-            # Validate IMO: must be 7 digits (magicport sometimes returns 7-digit IMOs)
+            # Validate IMO: must be 7 digits
             if not re.match(r"^\d{7}$", imo):
                 log("DEBUG", f"  Skipping invalid IMO: {imo}")
                 total_skipped += 1
