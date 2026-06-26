@@ -117,6 +117,7 @@ def parse_management_html(html: str) -> Dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
     sections = {}
 
+    # Find all accordion items (works for both full page and partial HTML)
     for item in soup.find_all("div", class_="accordion__item"):
         toggle = item.find("h3", class_="accordion__item-toggle")
         if not toggle:
@@ -130,11 +131,11 @@ def parse_management_html(html: str) -> Dict[str, Any]:
         if not content:
             continue
 
-        # Extract name
+        # Extract name from link or plain text
         name = None
         p = content.find("p", class_=lambda x: x and "text-style" in x)
         if p:
-            a = p.find("a")
+            a = p.find("a", class_="text--primary")
             if a:
                 name = a.get_text(strip=True)
             else:
@@ -150,11 +151,11 @@ def parse_management_html(html: str) -> Dict[str, Any]:
                     addr_span = li.find("span", class_="list__item-label")
                     if addr_span:
                         text = addr_span.get_text(strip=True)
-                        if text and not text.startswith("•"):
+                        if text and not text.startswith("•") and len(text) > 5:
                             address = text
                             break
 
-        if name:
+        if name and len(name) > 2:
             sections[label] = {"name": name, "address": address}
 
     return sections
