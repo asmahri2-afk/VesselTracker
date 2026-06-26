@@ -1,0 +1,41 @@
+name: MagicPort Vessel Enricher
+
+on:
+  schedule:
+    # Daily at 02:00 UTC — adjust as needed
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # ~3000 ports × 1.5s ≈ 75 min + buffer
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run MagicPort enricher
+        run: python magicport_enricher.py
+
+      - name: Upload run log (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enricher-log
+          path: |
+            *.log
