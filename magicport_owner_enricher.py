@@ -89,8 +89,9 @@ def fetch_management_page(imo: str, session, csrf_token: str) -> Optional[str]:
         "Accept-Encoding": "gzip, deflate, br",
         "Referer": f"https://magicport.ai/vessels/{imo}",
         "X-CSRF-Token": csrf_token,
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
+        "X-Requested-With": "XMLHttpRequest",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
     }
     for attempt in range(3):
