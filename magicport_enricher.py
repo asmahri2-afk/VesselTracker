@@ -145,13 +145,13 @@ def get_csrf_token(session) -> Optional[str]:
         html = r.text
 
         # Pattern 1: <meta name="csrf-token" content="...">
-        m = re.search(r'<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']', html, re.IGNORECASE)
+        m = re.search(r'''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']''', html, re.IGNORECASE)
         if not m:
             # Pattern 2: <meta content="..." name="csrf-token">
-            m = re.search(r'<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']', html, re.IGNORECASE)
+            m = re.search(r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']''', html, re.IGNORECASE)
         if not m:
             # Pattern 3: JSON embedded in page
-            m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
+            m = re.search(r'''"csrfToken"\s*:\s*"([^"]+)"''', html)
         if m:
             token = m.group(1)
             log("INFO", f"CSRF token obtained: {token[:20]}...")
@@ -163,7 +163,7 @@ def get_csrf_token(session) -> Optional[str]:
 
 
 def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str, Any]]:
-    """POST /vessel-at-port/ using shared session + CSRF token."""
+    """POST /vessel-at-port using shared session + CSRF token."""
     url = port_url.rstrip("/") + "/vessel-at-port"
     headers = {
         "User-Agent": (
@@ -197,8 +197,6 @@ def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str
                 if "imo" in data:
                     return [data]
             return []
-        except requests.exceptions.Timeout:
-            log("WARNING", f"{url} timeout (attempt {attempt + 1}/3)")
         except Exception as e:
             log("WARNING", f"{url} error (attempt {attempt + 1}/3): {e}")
         if attempt < 2:
@@ -212,6 +210,7 @@ def upsert_vessel(row: dict) -> bool:
         log("ERROR", "Supabase credentials missing — skipping upsert")
         return False
     try:
+        import requests
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/static_vessel_cache",
             json=row,
