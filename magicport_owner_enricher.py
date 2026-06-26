@@ -6,7 +6,7 @@ Scrape vessel ownership/management data from magicport.ai
   - static_vessel_cache (equasis_owner, equasis_address)
   - vessel_owners (name, address, equasis_source, equasis_address)
 
-Uses curl_cffi to bypass Cloudflare + extracts Laravel CSRF token from homepage.
+Flow: visit vessel page → extract CSRF → POST management endpoint.
 
 Env:
     SUPABASE_URL
@@ -29,10 +29,7 @@ from typing import Optional, Dict, Any, List
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-REQUEST_DELAY = 1.5   # seconds between management page requests
-BATCH_SIZE = 200      # Supabase fetch chunk size
-
-# Only process IMOs missing owner? Set to False to re-scrape all.
+REQUEST_DELAY = 2.0   # seconds between vessels
 ONLY_MISSING = True
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -44,8 +41,19 @@ def log(level: str, msg: str):
     print(f"[{ts}] [{level}] {msg}", flush=True)
 
 
-def get_csrf_token(session) -> Optional[str]:
-    """Fetch magicport.ai homepage to obtain session cookies + CSRF token."""
+def extract_csrf_from_html(html: str) -> Optional[str]:
+    """Extract Laravel CSRF token from HTML meta tag."""
+    m = re.search(r'''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']''', html, re.IGNORECASE)
+    if not m:
+        m = re.search(r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']''', html, re.IGNORECASE)
+    if not m:
+        m = re.search(r'''"csrfToken"\s*:\s*"([^"]+)"''', html)
+    return m.group(1) if m else None
+
+
+def fetch_vessel_page(imo: str, session) -> Optional[str]:
+    """GET vessel page to establish session context + extract CSRF."""
+    url = f"https://magicport.ai/vessels/{imo}"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -55,54 +63,47 @@ def get_csrf_token(session) -> Optional[str]:
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
         "Referer": "https://magicport.ai/",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
     }
     try:
-        r = session.get("https://magicport.ai/", headers=headers, timeout=30)
-        r.raise_for_status()
-        html = r.text
-        # Pattern 1: <meta name="csrf-token" content="...">
-        m = re.search(r'''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']''', html, re.IGNORECASE)
-        if not m:
-            m = re.search(r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']''', html, re.IGNORECASE)
-        if not m:
-            m = re.search(r'''"csrfToken"\s*:\s*"([^"]+)"''', html)
-        if m:
-            token = m.group(1)
-            log("INFO", f"CSRF token obtained: {token[:20]}...")
-            return token
-        log("WARNING", "CSRF token not found in homepage HTML")
+        r = session.get(url, headers=headers, timeout=30, allow_redirects=True)
+        if r.status_code == 200:
+            return r.text
+        log("DEBUG", f"IMO {imo} vessel page → {r.status_code}")
     except Exception as e:
-        log("WARNING", f"Failed to fetch homepage for CSRF: {e}")
+        log("DEBUG", f"IMO {imo} vessel page error: {e}")
     return None
 
 
-def fetch_management_page(imo: str, session, csrf_token: str) -> Optional[str]:
-    """GET /vessels/load/management/{imo} and return HTML."""
+def fetch_management(imo: str, session, referer: str, csrf_token: str) -> Optional[str]:
+    """POST to management endpoint with proper context."""
     url = f"https://magicport.ai/vessels/load/management/{imo}"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept": "*/*",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
-        "Referer": f"https://magicport.ai/vessels/{imo}",
-        "X-CSRF-Token": csrf_token,
+        "Content-Type": "application/json",
+        "Origin": "https://magicport.ai",
+        "Referer": referer,
         "X-Requested-With": "XMLHttpRequest",
+        "X-CSRF-Token": csrf_token,
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
     }
-    for attempt in range(3):
-        try:
-            r = session.get(url, headers=headers, timeout=30)
-            r.raise_for_status()
+    try:
+        r = session.post(url, headers=headers, json={}, timeout=30)
+        if r.status_code == 200:
             return r.text
-        except Exception as e:
-            log("WARNING", f"IMO {imo} fetch error (attempt {attempt + 1}/3): {e}")
-        if attempt < 2:
-            time.sleep(5 * (attempt + 1))
+        log("DEBUG", f"IMO {imo} management POST → {r.status_code}")
+    except Exception as e:
+        log("DEBUG", f"IMO {imo} management POST error: {e}")
     return None
 
 
@@ -117,7 +118,6 @@ def parse_management_html(html: str) -> Dict[str, Any]:
     soup = BeautifulSoup(html, "html.parser")
     sections = {}
 
-    # Find all accordion items (works for both full page and partial HTML)
     for item in soup.find_all("div", class_="accordion__item"):
         toggle = item.find("h3", class_="accordion__item-toggle")
         if not toggle:
@@ -131,7 +131,6 @@ def parse_management_html(html: str) -> Dict[str, Any]:
         if not content:
             continue
 
-        # Extract name from link or plain text
         name = None
         p = content.find("p", class_=lambda x: x and "text-style" in x)
         if p:
@@ -141,7 +140,6 @@ def parse_management_html(html: str) -> Dict[str, Any]:
             else:
                 name = p.get_text(strip=True)
 
-        # Extract address (first list item with map icon, not locked)
         address = None
         ul = content.find("ul", class_="list--icon")
         if ul:
@@ -170,20 +168,17 @@ def extract_owner(parsed: dict) -> tuple:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SUPABASE — read / write
+# SUPABASE
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_imos() -> List[str]:
-    """Fetch IMOs from static_vessel_cache. If ONLY_MISSING, only those without equasis_owner."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         log("CRITICAL", "Supabase credentials missing")
         return []
-
     imos = []
     url = f"{SUPABASE_URL}/rest/v1/static_vessel_cache?select=imo"
     if ONLY_MISSING:
         url += "&equasis_owner=is.null"
-
     try:
         import requests
         r = requests.get(url, headers={
@@ -195,34 +190,29 @@ def get_imos() -> List[str]:
             imos.append(row["imo"])
         log("INFO", f"Fetched {len(imos)} IMOs from Supabase" + (" (missing owner only)" if ONLY_MISSING else ""))
     except Exception as e:
-        log("WARNING", f"Failed to fetch IMOs from Supabase: {e}")
+        log("WARNING", f"Failed to fetch IMOs: {e}")
     return imos
 
 
 def supabase_get_owner_row(imo: str) -> Optional[dict]:
-    """Fetch current vessel_owners row for this IMO."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return None
     try:
         import requests
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/vessel_owners?imo=eq.{imo}&select=imo,name,address,phone,email,equasis_source,equasis_address,pi_club",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-            },
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
             timeout=10,
         )
         if r.ok:
             rows = r.json()
             return rows[0] if rows else None
     except Exception as e:
-        log("WARNING", f"vessel_owners fetch error for IMO {imo}: {e}")
+        log("WARNING", f"vessel_owners fetch error IMO {imo}: {e}")
     return None
 
 
 def upsert_static_cache(imo: str, owner_name: str, owner_address: Optional[str]) -> bool:
-    """Update equasis_owner / equasis_address in static_vessel_cache."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return False
     row = {"imo": imo, "equasis_owner": owner_name}
@@ -248,41 +238,26 @@ def upsert_static_cache(imo: str, owner_name: str, owner_address: Optional[str])
 
 
 def upsert_vessel_owner(imo: str, owner_name: str, owner_address: Optional[str]) -> bool:
-    """Upsert into vessel_owners with same merge logic as Equasis enricher."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return False
-
     existing = supabase_get_owner_row(imo)
     now = datetime.now(timezone.utc).isoformat()
 
     if existing is None:
-        # Brand new — insert full MagicPort record
         row = {
-            "imo":             str(imo),
-            "name":            owner_name,
-            "address":         owner_address,
-            "equasis_address": owner_address,
-            "equasis_source":  True,
-            "updated_by":      "magicport",
-            "updated_at":      now,
+            "imo": str(imo), "name": owner_name, "address": owner_address,
+            "equasis_address": owner_address, "equasis_source": True,
+            "updated_by": "magicport", "updated_at": now,
         }
         row = {k: v for k, v in row.items() if v is not None}
-
     elif existing.get("equasis_source") is True:
-        # Auto record — update freely
         row = {
-            "imo":             str(imo),
-            "name":            owner_name,
-            "address":         owner_address,
-            "equasis_address": owner_address,
-            "equasis_source":  True,
-            "updated_by":      "magicport",
-            "updated_at":      now,
+            "imo": str(imo), "name": owner_name, "address": owner_address,
+            "equasis_address": owner_address, "equasis_source": True,
+            "updated_by": "magicport", "updated_at": now,
         }
         row = {k: v for k, v in row.items() if v is not None}
-
     else:
-        # User-owned record — only fill genuine nulls
         row = {"imo": str(imo), "updated_at": now}
         if not existing.get("equasis_address") and owner_address:
             row["equasis_address"] = owner_address
@@ -291,7 +266,7 @@ def upsert_vessel_owner(imo: str, owner_name: str, owner_address: Optional[str])
         if not existing.get("name") and owner_name:
             row["name"] = owner_name
         if len(row) == 2:
-            return True  # Nothing to update
+            return True
 
     try:
         import requests
@@ -306,10 +281,7 @@ def upsert_vessel_owner(imo: str, owner_name: str, owner_address: Optional[str])
             },
             timeout=10,
         )
-        if r.status_code in (200, 201, 204):
-            return True
-        log("WARNING", f"vessel_owners upsert {imo} → {r.status_code}: {r.text[:200]}")
-        return False
+        return r.status_code in (200, 201, 204)
     except Exception as e:
         log("WARNING", f"vessel_owners upsert error IMO {imo}: {e}")
         return False
@@ -332,39 +304,55 @@ def main():
     try:
         from curl_cffi import requests as curl_requests
         from bs4 import BeautifulSoup
-        log("INFO", "Using curl_cffi + BeautifulSoup")
     except ImportError as e:
         log("CRITICAL", f"Missing dependency: {e}. Install: pip install curl_cffi beautifulsoup4")
         sys.exit(1)
 
-    # 1. Get IMOs to process
     imos = get_imos()
     if not imos:
         log("INFO", "No IMOs to process — exiting")
         return
 
-    # 2. Create session and fetch CSRF token
     session = curl_requests.Session(impersonate="chrome120")
-    log("INFO", "Fetching magicport.ai homepage for session cookies...")
-    csrf_token = get_csrf_token(session)
-    if not csrf_token:
-        log("CRITICAL", "Failed to obtain CSRF token")
-        sys.exit(1)
 
     total_enriched = 0
     total_failed = 0
     total_no_data = 0
+    total_410 = 0
 
     for idx, imo in enumerate(imos, 1):
         log("INFO", f"[{idx}/{len(imos)}] IMO {imo}")
 
-        html = fetch_management_page(imo, session, csrf_token)
-        if html is None:
+        # Step 1: Visit vessel page to get context + CSRF
+        vessel_html = fetch_vessel_page(imo, session)
+        if vessel_html is None:
+            log("INFO", "  → Vessel page not found")
             total_failed += 1
             time.sleep(REQUEST_DELAY)
             continue
 
-        parsed = parse_management_html(html)
+        csrf = extract_csrf_from_html(vessel_html)
+        if not csrf:
+            log("INFO", "  → CSRF not found on vessel page")
+            total_no_data += 1
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        # Determine referer from any link in the page, or construct it
+        referer = f"https://magicport.ai/vessels/{imo}"
+        m = re.search(r'''href=["'](https://magicport\.ai/vessels/[^"']+)["']''', vessel_html)
+        if m:
+            referer = m.group(1)
+
+        # Step 2: POST to management endpoint
+        mgmt_html = fetch_management(imo, session, referer, csrf)
+        if mgmt_html is None:
+            log("INFO", "  → Management endpoint returned 410 (no access)")
+            total_410 += 1
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        parsed = parse_management_html(mgmt_html)
         if not parsed:
             log("INFO", "  → No management sections found")
             total_no_data += 1
@@ -391,7 +379,7 @@ def main():
         time.sleep(REQUEST_DELAY)
 
     print("=" * 60)
-    log("DONE", f"Enriched: {total_enriched} | No data: {total_no_data} | Errors: {total_failed}")
+    log("DONE", f"Enriched: {total_enriched} | No data: {total_no_data} | 410: {total_410} | Errors: {total_failed}")
     print("=" * 60)
 
 
