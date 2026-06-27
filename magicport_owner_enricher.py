@@ -20,17 +20,26 @@ import os
 import re
 import sys
 import time
+import random
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CONFIG
+# CONFIG — ADJUST THESE
 # ══════════════════════════════════════════════════════════════════════════════
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-REQUEST_DELAY = 2.0   # seconds between vessels
+
+# MagicPort is VERY aggressive on rate limiting. 6-10s minimum between requests.
+REQUEST_DELAY_MIN = float(os.getenv("REQUEST_DELAY_MIN", "6.0"))   # minimum seconds
+REQUEST_DELAY_MAX = float(os.getenv("REQUEST_DELAY_MAX", "10.0"))  # maximum seconds (jitter)
+
 ONLY_MISSING = True
+
+# 429 backoff: initial wait in seconds, doubles each retry
+BACKOFF_BASE = float(os.getenv("BACKOFF_BASE", "30.0"))   # 30s, 60s, 120s...
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))            # retries per IMO on 429
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -41,17 +50,22 @@ def log(level: str, msg: str):
     print(f"[{ts}] [{level}] {msg}", flush=True)
 
 
+def jitter_delay():
+    """Return a random delay between MIN and MAX seconds."""
+    return random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX)
+
+
 def extract_csrf_from_html(html: str) -> Optional[str]:
     """Extract Laravel CSRF token from HTML meta tag."""
-    m = re.search(r'''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']''', html, re.IGNORECASE)
+    m = re.search(r''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']'', html, re.IGNORECASE)
     if not m:
-        m = re.search(r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']''', html, re.IGNORECASE)
+        m = re.search(r''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']'', html, re.IGNORECASE)
     if not m:
-        m = re.search(r'''"csrfToken"\s*:\s*"([^"]+)"''', html)
+        m = re.search(r''"csrfToken"\s*:\s*"([^"]+)"'', html)
     return m.group(1) if m else None
 
 
-def fetch_vessel_page(imo: str, session) -> Optional[str]:
+def fetch_vessel_page(imo: str, session, retries: int = 0) -> Optional[str]:
     """GET vessel page to establish session context + extract CSRF."""
     url = f"https://magicport.ai/vessels/{imo}"
     headers = {
@@ -71,13 +85,18 @@ def fetch_vessel_page(imo: str, session) -> Optional[str]:
         r = session.get(url, headers=headers, timeout=30, allow_redirects=True)
         if r.status_code == 200:
             return r.text
+        if r.status_code == 429 and retries < MAX_RETRIES:
+            wait = (BACKOFF_BASE * (2 ** retries)) + random.uniform(0, 10)
+            log("WARN", f"IMO {imo} vessel page → 429, backoff {wait:.0f}s (retry {retries+1}/{MAX_RETRIES})")
+            time.sleep(wait)
+            return fetch_vessel_page(imo, session, retries + 1)
         log("DEBUG", f"IMO {imo} vessel page → {r.status_code}")
     except Exception as e:
         log("DEBUG", f"IMO {imo} vessel page error: {e}")
     return None
 
 
-def fetch_management(imo: str, session, referer: str, csrf_token: str) -> Optional[str]:
+def fetch_management(imo: str, session, referer: str, csrf_token: str, retries: int = 0) -> Optional[str]:
     """POST to management endpoint with proper context."""
     url = f"https://magicport.ai/vessels/load/management/{imo}"
     headers = {
@@ -101,6 +120,11 @@ def fetch_management(imo: str, session, referer: str, csrf_token: str) -> Option
         r = session.post(url, headers=headers, json={}, timeout=30)
         if r.status_code == 200:
             return r.text
+        if r.status_code == 429 and retries < MAX_RETRIES:
+            wait = (BACKOFF_BASE * (2 ** retries)) + random.uniform(0, 10)
+            log("WARN", f"IMO {imo} management POST → 429, backoff {wait:.0f}s (retry {retries+1}/{MAX_RETRIES})")
+            time.sleep(wait)
+            return fetch_management(imo, session, referer, csrf_token, retries + 1)
         log("DEBUG", f"IMO {imo} management POST → {r.status_code}")
     except Exception as e:
         log("DEBUG", f"IMO {imo} management POST error: {e}")
@@ -192,6 +216,27 @@ def get_imos() -> List[str]:
     except Exception as e:
         log("WARNING", f"Failed to fetch IMOs: {e}")
     return imos
+
+
+def get_already_enriched_imos() -> set:
+    """Return set of IMOs already having equasis_owner set (for resume support)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return set()
+    enriched = set()
+    url = f"{SUPABASE_URL}/rest/v1/static_vessel_cache?select=imo&equasis_owner=not.is.null"
+    try:
+        import requests
+        r = requests.get(url, headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        }, timeout=30)
+        if r.ok:
+            for row in r.json():
+                enriched.add(str(row["imo"]))
+        log("INFO", f"Found {len(enriched)} already-enriched IMOs (will skip)")
+    except Exception as e:
+        log("WARNING", f"Failed to fetch enriched IMOs: {e}")
+    return enriched
 
 
 def supabase_get_owner_row(imo: str) -> Optional[dict]:
@@ -313,6 +358,18 @@ def main():
         log("INFO", "No IMOs to process — exiting")
         return
 
+    # Skip already-enriched IMOs for resume support
+    already_enriched = get_already_enriched_imos()
+    imos_to_process = [imo for imo in imos if str(imo) not in already_enriched]
+    skipped = len(imos) - len(imos_to_process)
+    if skipped:
+        log("INFO", f"Skipping {skipped} already-enriched IMOs")
+    imos = imos_to_process
+
+    if not imos:
+        log("INFO", "All IMOs already enriched — exiting")
+        return
+
     session = curl_requests.Session(impersonate="chrome120")
 
     total_enriched = 0
@@ -328,19 +385,19 @@ def main():
         if vessel_html is None:
             log("INFO", "  → Vessel page not found")
             total_failed += 1
-            time.sleep(REQUEST_DELAY)
+            time.sleep(jitter_delay())
             continue
 
         csrf = extract_csrf_from_html(vessel_html)
         if not csrf:
             log("INFO", "  → CSRF not found on vessel page")
             total_no_data += 1
-            time.sleep(REQUEST_DELAY)
+            time.sleep(jitter_delay())
             continue
 
         # Determine referer from any link in the page, or construct it
         referer = f"https://magicport.ai/vessels/{imo}"
-        m = re.search(r'''href=["'](https://magicport\.ai/vessels/[^"']+)["']''', vessel_html)
+        m = re.search(r'''href=["'](https://magicport\.ai/vessels/[^"']+)["']'', vessel_html)
         if m:
             referer = m.group(1)
 
@@ -349,21 +406,21 @@ def main():
         if mgmt_html is None:
             log("INFO", "  → Management endpoint returned 410 (no access)")
             total_410 += 1
-            time.sleep(REQUEST_DELAY)
+            time.sleep(jitter_delay())
             continue
 
         parsed = parse_management_html(mgmt_html)
         if not parsed:
             log("INFO", "  → No management sections found")
             total_no_data += 1
-            time.sleep(REQUEST_DELAY)
+            time.sleep(jitter_delay())
             continue
 
         owner_name, owner_address = extract_owner(parsed)
         if not owner_name:
             log("INFO", "  → No owner name extracted")
             total_no_data += 1
-            time.sleep(REQUEST_DELAY)
+            time.sleep(jitter_delay())
             continue
 
         log("INFO", f"  → Owner: {owner_name[:50]} | Address: {owner_address[:50] if owner_address else '—'}")
@@ -376,7 +433,8 @@ def main():
         else:
             total_failed += 1
 
-        time.sleep(REQUEST_DELAY)
+        # Random delay between 6-10 seconds to avoid pattern detection
+        time.sleep(jitter_delay())
 
     print("=" * 60)
     log("DONE", f"Enriched: {total_enriched} | No data: {total_no_data} | 410: {total_410} | Errors: {total_failed}")
