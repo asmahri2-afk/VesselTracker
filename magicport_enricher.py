@@ -19,17 +19,18 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 
-PORTS_FILE   = "/mnt/agents/upload/ports.txt"   # fallback path
+PORTS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
 REQUEST_DELAY = 1.0   # seconds between port requests
 VESSEL_DELAY  = 0.1   # seconds between individual vessel upserts
+SKIP_EXISTING = True  # skip vessels already in static_vessel_cache
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ISO 3166-1 alpha-2 → full country name
@@ -145,13 +146,13 @@ def get_csrf_token(session) -> Optional[str]:
         html = r.text
 
         # Pattern 1: <meta name="csrf-token" content="...">
-        m = re.search(r'''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']''', html, re.IGNORECASE)
+        m = re.search(r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
         if not m:
             # Pattern 2: <meta content="..." name="csrf-token">
-            m = re.search(r'''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']''', html, re.IGNORECASE)
+            m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\']', html, re.IGNORECASE)
         if not m:
             # Pattern 3: JSON embedded in page
-            m = re.search(r'''"csrfToken"\s*:\s*"([^"]+)"''', html)
+            m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
         if m:
             token = m.group(1)
             log("INFO", f"CSRF token obtained: {token[:20]}...")
@@ -202,6 +203,48 @@ def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str
         if attempt < 2:
             time.sleep(5 * (attempt + 1))
     return []
+
+
+def get_existing_imos() -> Set[str]:
+    """Fetch all existing IMOs from static_vessel_cache (paginated)."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log("WARNING", "Cannot fetch existing IMOs — credentials missing")
+        return set()
+
+    existing: Set[str] = set()
+    offset = 0
+    limit = 1000
+    import requests
+
+    while True:
+        try:
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/static_vessel_cache?select=imo",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Range": f"{offset}-{offset + limit - 1}",
+                },
+                timeout=30,
+            )
+            if not r.ok:
+                log("WARNING", f"Fetch existing IMOs failed: HTTP {r.status_code}")
+                break
+            rows = r.json()
+            if not rows:
+                break
+            for row in rows:
+                if row.get("imo"):
+                    existing.add(str(row["imo"]))
+            if len(rows) < limit:
+                break
+            offset += limit
+        except Exception as e:
+            log("WARNING", f"Error fetching existing IMOs: {e}")
+            break
+
+    log("INFO", f"Found {len(existing)} existing IMOs in cache (will skip)")
+    return existing
 
 
 def upsert_vessel(row: dict) -> bool:
@@ -269,6 +312,11 @@ def main():
 
     log("INFO", f"Loaded {len(ports)} ports from {ports_path}")
 
+    # Load existing IMOs once (skip duplicates)
+    existing_imos: Set[str] = set()
+    if SKIP_EXISTING:
+        existing_imos = get_existing_imos()
+
     # Create session with Chrome impersonation
     session = curl_requests.Session(impersonate="chrome120")
 
@@ -282,6 +330,7 @@ def main():
     total_inserted = 0
     total_failed = 0
     total_skipped = 0
+    total_existing = 0
 
     for idx, port_url in enumerate(ports, 1):
         log("INFO", f"[{idx}/{len(ports)}] {port_url}")
@@ -293,6 +342,8 @@ def main():
             continue
 
         log("INFO", f"  → {len(vessels)} vessel(s)")
+        new_in_port = 0
+        existing_in_port = 0
 
         for v in vessels:
             imo_raw = v.get("imo")
@@ -304,6 +355,12 @@ def main():
             if not re.match(r"^\d{7}$", imo):
                 log("DEBUG", f"  Skipping invalid IMO: {imo}")
                 total_skipped += 1
+                continue
+
+            # Skip if already in DB
+            if SKIP_EXISTING and imo in existing_imos:
+                existing_in_port += 1
+                total_existing += 1
                 continue
 
             row: Dict[str, Any] = {"imo": imo}
@@ -338,16 +395,24 @@ def main():
 
             if upsert_vessel(row):
                 total_inserted += 1
+                new_in_port += 1
+                # Add to in-memory set so we don't re-insert it later in the same run
+                existing_imos.add(imo)
             else:
                 total_failed += 1
 
             if VESSEL_DELAY > 0:
                 time.sleep(VESSEL_DELAY)
 
+        if existing_in_port > 0:
+            log("INFO", f"  → {new_in_port} new | {existing_in_port} already in DB")
+        else:
+            log("INFO", f"  → {new_in_port} new vessel(s) inserted")
+
         time.sleep(REQUEST_DELAY)
 
     print("=" * 60)
-    log("DONE", f"Inserted/Updated: {total_inserted} | Failed: {total_failed} | Skipped: {total_skipped}")
+    log("DONE", f"Inserted: {total_inserted} | Existing skipped: {total_existing} | Failed: {total_failed} | Invalid skipped: {total_skipped}")
     print("=" * 60)
 
 
