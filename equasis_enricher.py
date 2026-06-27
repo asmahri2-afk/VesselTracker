@@ -1,307 +1,259 @@
 """
-equasis_enricher.py
-───────────────────
-Daily job: fetch all A N P vessels + Rotterdam ship visits,
-enrich missing/incomplete entries in Supabase static_vessel_cache
-via Oracle /equasis API.
+magicport_enricher.py
+─────────────────────
+Scrape vessel-at-port data from magicport.ai for all ports listed
+in ports.txt and upsert into Supabase static_vessel_cache.
 
-Rules:
-  - Skip IMOs already cached with equasis_owner set within CACHE_DAYS
-  - If vessel exists but has gaps (no owner, no flag, etc.) → merge,
-    never overwrite a field that already has a value
-  - Rate limit: 3 requests / minute, no upper cap
+Uses curl_cffi to bypass Cloudflare + extracts Laravel CSRF token from homepage.
+
+Env:
+    SUPABASE_URL
+    SUPABASE_SERVICE_KEY  (or SUPABASE_KEY)
+
+Usage:
+    python magicport_enricher.py
 """
 
 import os
 import re
 import sys
-import json
 import time
-import requests
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any, Set
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 
-ANP_URL      = "https://www.anp.org.ma/_vti_bin/WS/Service.svc/mvmnv/all"
-ROTTERDAM_URL= "https://ats-api.portofrotterdam.com/api/ship-visits"
-RENDER_BASE  = os.getenv("RENDER_BASE", "").rstrip("/")
-API_SECRET   = os.getenv("API_SECRET", "")
+PORTS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
+REQUEST_DELAY = 1.0   # seconds between port requests
+VESSEL_DELAY  = 0.1   # seconds between individual vessel upserts
+SKIP_EXISTING = True  # skip vessels already in static_vessel_cache
 
-BATCH_SIZE   = 10     # Equasis requests per minute
-BATCH_DELAY  = 30    # seconds between batches
-CACHE_DAYS   = 182    # days before a complete record is considered stale
-REQUEST_GAP  = 2     # seconds between individual requests within a batch
+# ══════════════════════════════════════════════════════════════════════════════
+# ISO 3166-1 alpha-2 → full country name
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Fields we get from Equasis / Rotterdam — used for merge logic
-EQUASIS_FIELDS = [
-    "name", "flag", "ship_type", "mmsi", "call_sign",
-    "gross_tonnage", "deadweight_t", "year_of_build",
-    "equasis_owner", "equasis_address", "pi_club", "class_society",
-]
+FLAG_MAP = {
+    "AF": "Afghanistan", "AL": "Albania", "DZ": "Algeria", "AS": "American Samoa",
+    "AD": "Andorra", "AO": "Angola", "AI": "Anguilla", "AQ": "Antarctica",
+    "AG": "Antigua and Barbuda", "AR": "Argentina", "AM": "Armenia", "AW": "Aruba",
+    "AU": "Australia", "AT": "Austria", "AZ": "Azerbaijan", "BS": "Bahamas",
+    "BH": "Bahrain", "BD": "Bangladesh", "BB": "Barbados", "BY": "Belarus",
+    "BE": "Belgium", "BZ": "Belize", "BJ": "Benin", "BM": "Bermuda",
+    "BT": "Bhutan", "BO": "Bolivia", "BQ": "Bonaire, Sint Eustatius and Saba",
+    "BA": "Bosnia and Herzegovina", "BW": "Botswana", "BV": "Bouvet Island",
+    "BR": "Brazil", "IO": "British Indian Ocean Territory", "BN": "Brunei Darussalam",
+    "BG": "Bulgaria", "BF": "Burkina Faso", "BI": "Burundi", "CV": "Cabo Verde",
+    "KH": "Cambodia", "CM": "Cameroon", "CA": "Canada", "KY": "Cayman Islands",
+    "CF": "Central African Republic", "TD": "Chad", "CL": "Chile", "CN": "China",
+    "CX": "Christmas Island", "CC": "Cocos (Keeling) Islands", "CO": "Colombia",
+    "KM": "Comoros", "CG": "Congo", "CD": "Congo, Democratic Republic of the",
+    "CK": "Cook Islands", "CR": "Costa Rica", "HR": "Croatia", "CU": "Cuba",
+    "CW": "Curacao", "CY": "Cyprus", "CZ": "Czechia", "CI": "Cote d'Ivoire",
+    "DK": "Denmark", "DJ": "Djibouti", "DM": "Dominica", "DO": "Dominican Republic",
+    "EC": "Ecuador", "EG": "Egypt", "SV": "El Salvador", "GQ": "Equatorial Guinea",
+    "ER": "Eritrea", "EE": "Estonia", "SZ": "Eswatini", "ET": "Ethiopia",
+    "FK": "Falkland Islands (Malvinas)", "FO": "Faroe Islands", "FJ": "Fiji",
+    "FI": "Finland", "FR": "France", "GF": "French Guiana", "PF": "French Polynesia",
+    "TF": "French Southern Territories", "GA": "Gabon", "GM": "Gambia", "GE": "Georgia",
+    "DE": "Germany", "GH": "Ghana", "GI": "Gibraltar", "GR": "Greece", "GL": "Greenland",
+    "GD": "Grenada", "GP": "Guadeloupe", "GU": "Guam", "GT": "Guatemala", "GG": "Guernsey",
+    "GN": "Guinea", "GW": "Guinea-Bissau", "GY": "Guyana", "HT": "Haiti",
+    "HM": "Heard Island and McDonald Islands", "VA": "Holy See", "HN": "Honduras",
+    "HK": "Hong Kong", "HU": "Hungary", "IS": "Iceland", "IN": "India",
+    "ID": "Indonesia", "IR": "Iran", "IQ": "Iraq", "IE": "Ireland", "IM": "Isle of Man",
+    "IL": "Israel", "IT": "Italy", "JM": "Jamaica", "JP": "Japan", "JE": "Jersey",
+    "JO": "Jordan", "KZ": "Kazakhstan", "KE": "Kenya", "KI": "Kiribati",
+    "KP": "Korea (Democratic People's Republic of)", "KR": "Korea, Republic of",
+    "KW": "Kuwait", "KG": "Kyrgyzstan", "LA": "Lao People's Democratic Republic",
+    "LV": "Latvia", "LB": "Lebanon", "LS": "Lesotho", "LR": "Liberia", "LY": "Libya",
+    "LI": "Liechtenstein", "LT": "Lithuania", "LU": "Luxembourg", "MO": "Macao",
+    "MG": "Madagascar", "MW": "Malawi", "MY": "Malaysia", "MV": "Maldives", "ML": "Mali",
+    "MT": "Malta", "MH": "Marshall Islands", "MQ": "Martinique", "MR": "Mauritania",
+    "MU": "Mauritius", "YT": "Mayotte", "MX": "Mexico", "FM": "Micronesia (Federated States of)",
+    "MD": "Moldova, Republic of", "MC": "Monaco", "MN": "Mongolia", "ME": "Montenegro",
+    "MS": "Montserrat", "MA": "Morocco", "MZ": "Mozambique", "MM": "Myanmar",
+    "NA": "Namibia", "NR": "Nauru", "NP": "Nepal", "NL": "Netherlands", "NC": "New Caledonia",
+    "NZ": "New Zealand", "NI": "Nicaragua", "NE": "Niger", "NG": "Nigeria", "NU": "Niue",
+    "NF": "Norfolk Island", "MK": "North Macedonia", "MP": "Northern Mariana Islands",
+    "NO": "Norway", "OM": "Oman", "PK": "Pakistan", "PW": "Palau", "PS": "Palestine, State of",
+    "PA": "Panama", "PG": "Papua New Guinea", "PY": "Paraguay", "PE": "Peru",
+    "PH": "Philippines", "PN": "Pitcairn", "PL": "Poland", "PT": "Portugal",
+    "PR": "Puerto Rico", "QA": "Qatar", "RE": "Reunion", "RO": "Romania",
+    "RU": "Russian Federation", "RW": "Rwanda", "BL": "Saint Barthelemy",
+    "SH": "Saint Helena, Ascension and Tristan da Cunha", "KN": "Saint Kitts and Nevis",
+    "LC": "Saint Lucia", "MF": "Saint Martin (French part)", "PM": "Saint Pierre and Miquelon",
+    "VC": "Saint Vincent and the Grenadines", "WS": "Samoa", "SM": "San Marino",
+    "ST": "Sao Tome and Principe", "SA": "Saudi Arabia", "SN": "Senegal", "RS": "Serbia",
+    "SC": "Seychelles", "SL": "Sierra Leone", "SG": "Singapore", "SX": "Sint Maarten (Dutch part)",
+    "SK": "Slovakia", "SI": "Slovenia", "SB": "Solomon Islands", "SO": "Somalia",
+    "ZA": "South Africa", "GS": "South Georgia and the South Sandwich Islands",
+    "SS": "South Sudan", "ES": "Spain", "LK": "Sri Lanka", "SD": "Sudan", "SR": "Suriname",
+    "SJ": "Svalbard and Jan Mayen", "SE": "Sweden", "CH": "Switzerland",
+    "SY": "Syrian Arab Republic", "TW": "Taiwan, Province of China", "TJ": "Tajikistan",
+    "TZ": "Tanzania, United Republic of", "TH": "Thailand", "TL": "Timor-Leste", "TG": "Togo",
+    "TK": "Tokelau", "TO": "Tonga", "TT": "Trinidad and Tobago", "TN": "Tunisia",
+    "TR": "Turkey", "TM": "Turkmenistan", "TC": "Turks and Caicos Islands", "TV": "Tuvalu",
+    "UG": "Uganda", "UA": "Ukraine", "AE": "United Arab Emirates", "GB": "United Kingdom",
+    "US": "United States of America", "UM": "United States Minor Outlying Islands",
+    "UY": "Uruguay", "UZ": "Uzbekistan", "VU": "Vanuatu", "VE": "Venezuela",
+    "VN": "Viet Nam", "VG": "Virgin Islands (British)", "VI": "Virgin Islands (U.S.)",
+    "WF": "Wallis and Futuna", "EH": "Western Sahara", "YE": "Yemen", "ZM": "Zambia",
+    "ZW": "Zimbabwe",
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _safe_float(val) -> Optional[float]:
-    try:
-        return float(str(val).replace(",", "").strip()) if val else None
-    except Exception:
-        return None
-
-def _safe_int(val) -> Optional[int]:
-    try:
-        return int(str(val).strip()) if val else None
-    except Exception:
-        return None
-
-def _safe_str(val) -> Optional[str]:
-    return str(val).strip() if val else None
-
-def _is_valid_imo(imo: str) -> bool:
-    imo = str(imo).strip()
-    if not re.match(r'^\d{7}$', imo):
-        return False
-    try:
-        total = sum(int(imo[i]) * (7 - i) for i in range(6))
-        return int(imo[6]) == total % 10
-    except Exception:
-        return False
-
 def log(level: str, msg: str):
     ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
     print(f"[{ts}] [{level}] {msg}", flush=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ANP — fetch all vessels
-# ══════════════════════════════════════════════════════════════════════════════
 
-def fetch_anp_vessels() -> list:
-    """Fetch all vessels from ANP API regardless of port."""
+def resolve_flag(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    code = str(code).strip().upper()
+    return FLAG_MAP.get(code, code)
+
+
+def extract_mmsi(route: Optional[str]) -> Optional[str]:
+    if not route:
+        return None
+    m = re.search(r"mmsi-(\d+)", str(route))
+    return m.group(1) if m else None
+
+
+def get_csrf_token(session) -> Optional[str]:
+    """Fetch magicport.ai homepage to obtain session cookies + CSRF token."""
     headers = {
-        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-        "Accept":          "application/json, text/plain, */*",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-        "Referer":         "https://www.anp.org.ma/",
-        "Origin":          "https://www.anp.org.ma",
-        "Cache-Control":   "no-cache",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://magicport.ai/",
     }
-    for attempt in range(3):
-        try:
-            log("INFO", f"Fetching ANP data (attempt {attempt + 1}/3)...")
-            r = requests.get(ANP_URL, headers=headers, timeout=(10, 60))
-            r.raise_for_status()
-            data = r.json()
-            if not isinstance(data, list):
-                raise ValueError("ANP response is not a list")
-            log("INFO", f"ANP returned {len(data)} vessel records")
-            return data
-        except Exception as e:
-            log("WARNING", f"ANP fetch attempt {attempt + 1} failed: {e}")
-            if attempt < 2:
-                time.sleep(5 * (2 ** attempt))
-    raise RuntimeError("ANP fetch failed after 3 attempts")
-
-def extract_imos(vessels: list) -> list:
-    """Extract unique valid 7-digit IMOs from ANP vessel list."""
-    seen, result = set(), []
-    for v in vessels:
-        raw = str(v.get("nUMERO_LLOYDField") or "").strip()
-        if raw and raw not in seen:
-            if _is_valid_imo(raw):
-                seen.add(raw)
-                result.append(raw)
-            else:
-                log("DEBUG", f"Skipping invalid IMO: '{raw}' ({v.get('nOM_NAVIREField', '?')})")
-    log("INFO", f"Extracted {len(result)} unique valid IMOs from {len(vessels)} records")
-    return result
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ROTTERDAM — fetch ship visits
-# ══════════════════════════════════════════════════════════════════════════════
-
-def fetch_rotterdam_vessels() -> list:
-    """Fetch all vessel visits from Port of Rotterdam ATS API.
-    Returns a flat list of all vessels from Present + Departed + Expected."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-        "Accept":     "application/json",
-        "Referer":    "https://ats-api.portofrotterdam.com/",
-    }
-    for attempt in range(3):
-        try:
-            log("INFO", f"Fetching Rotterdam data (attempt {attempt + 1}/3)...")
-            r = requests.get(ROTTERDAM_URL, headers=headers, timeout=(10, 60))
-            r.raise_for_status()
-            data = r.json()
-
-            if not isinstance(data, dict):
-                raise ValueError(f"Rotterdam response is {type(data).__name__}, expected dict")
-
-            # Rotterdam returns {"Present": [...], "Departed": [...], "Expected": [...]}
-            vessels = []
-            for key in ("Present", "Departed", "Expected"):
-                if key in data and isinstance(data[key], list):
-                    vessels.extend(data[key])
-
-            if not vessels:
-                raise ValueError("Rotterdam response has no vessel lists under Present/Departed/Expected")
-
-            log("INFO", f"Rotterdam returned {len(vessels)} vessel records")
-            return vessels
-        except Exception as e:
-            log("WARNING", f"Rotterdam fetch attempt {attempt + 1} failed: {e}")
-            if attempt < 2:
-                time.sleep(5 * (2 ** attempt))
-    raise RuntimeError("Rotterdam fetch failed after 3 attempts")
-
-def normalize_rotterdam(vessel: dict) -> dict:
-    """Normalise Rotterdam JSON fields to our schema."""
-    return {
-        "imo":             _safe_str(vessel.get("imo")),
-        "mmsi":            _safe_str(vessel.get("mmsi")),
-        "name":            vessel.get("name") or None,
-        "call_sign":       vessel.get("call_sign") or None,
-        "gross_tonnage":   _safe_float(vessel.get("gross_tonnage")),
-        "deadweight_t":    _safe_float(vessel.get("deadweight")),
-        "flag":            vessel.get("flag_code") or None,
-        "year_of_build":   _safe_int(vessel.get("year_of_build")),
-        "ship_type":       None,  # Rotterdam does not provide this
-        "equasis_owner":   None,  # Rotterdam has "operator", not owner
-        "equasis_address": None,
-        "pi_club":         None,
-        "class_society":   None,
-    }
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SUPABASE — read cache
-# ══════════════════════════════════════════════════════════════════════════════
-
-def supabase_get_cache(imos: list) -> dict:
-    """
-    Return dict {imo: row} for all IMOs currently in static_vessel_cache.
-    Fetches in chunks of 200 to stay within URL limits.
-    """
-    if not SUPABASE_URL or not SUPABASE_KEY or not imos:
-        return {}
-
-    cache = {}
-    chunk_size = 200
-    fields = "imo,name,flag,ship_type,mmsi,call_sign,gross_tonnage,deadweight_t,year_of_build,equasis_owner,equasis_address,pi_club,class_society,equasis_updated"
-
-    for i in range(0, len(imos), chunk_size):
-        chunk = imos[i : i + chunk_size]
-        imo_list = ",".join(chunk)
-        url = (
-            f"{SUPABASE_URL}/rest/v1/static_vessel_cache"
-            f"?imo=in.({imo_list})"
-            f"&select={fields}"
-        )
-        try:
-            r = requests.get(url, headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-            }, timeout=15)
-            if r.ok:
-                for row in r.json():
-                    cache[row["imo"]] = row
-            else:
-                log("WARNING", f"Supabase cache fetch returned {r.status_code}: {r.text[:200]}")
-        except Exception as e:
-            log("WARNING", f"Supabase cache fetch error: {e}")
-
-    log("INFO", f"Cache loaded: {len(cache)} existing records for {len(imos)} IMOs")
-    return cache
-
-def is_complete(row: dict) -> bool:
-    """
-    A record is 'complete' if it has equasis_owner AND
-    was updated within CACHE_DAYS. If so, skip it.
-    """
-    if not row.get("equasis_owner"):
-        return False
-    updated = row.get("equasis_updated")
-    if not updated:
-        return False
     try:
-        dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-        age_days = (datetime.now(timezone.utc) - dt).days
-        return age_days < CACHE_DAYS
-    except Exception:
-        return False
+        r = session.get("https://magicport.ai/", headers=headers, timeout=30)
+        r.raise_for_status()
+        html = r.text
 
-def needs_enrichment(row: dict) -> bool:
-    """
-    Return True if the row has any gap that Equasis / Rotterdam can fill:
-    missing owner, flag, ship_type, gross_tonnage, mmsi, etc.
-    """
-    if is_complete(row):
-        return False
-    gaps = [f for f in EQUASIS_FIELDS if not row.get(f)]
-    return len(gaps) > 0
+        # Pattern 1: <meta name="csrf-token" content="...">
+        m = re.search(r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+        if not m:
+            # Pattern 2: <meta content="..." name="csrf-token">
+            m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\']', html, re.IGNORECASE)
+        if not m:
+            # Pattern 3: JSON embedded in page
+            m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
+        if m:
+            token = m.group(1)
+            log("INFO", f"CSRF token obtained: {token[:20]}...")
+            return token
+        log("WARNING", "CSRF token not found in homepage HTML")
+    except Exception as e:
+        log("WARNING", f"Failed to fetch homepage for CSRF: {e}")
+    return None
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SUPABASE — write
-# ══════════════════════════════════════════════════════════════════════════════
 
-def build_upsert_row(imo: str, equasis_data: Optional[dict], existing_row: Optional[dict], rotterdam_data: Optional[dict] = None) -> dict:
-    """
-    Build the row to upsert.
-    Rule: never overwrite a field that already has a non-null value.
-    Priority: existing DB → Equasis → Rotterdam.
-    Only fill gaps.
-    """
-    # Normalise Equasis response field names
-    eq = {}
-    if equasis_data:
-        eq = {
-            "name":            equasis_data.get("vessel_name") or equasis_data.get("name"),
-            "flag":            equasis_data.get("flag")         or equasis_data.get("Flag"),
-            "ship_type":       equasis_data.get("ship_type")    or equasis_data.get("Type of ship"),
-            "mmsi":            equasis_data.get("mmsi")         or equasis_data.get("MMSI"),
-            "call_sign":       equasis_data.get("call_sign")    or equasis_data.get("Call Sign"),
-            "gross_tonnage":   _safe_float(equasis_data.get("gross_tonnage") or equasis_data.get("Gross tonnage")),
-            "deadweight_t":    _safe_float(equasis_data.get("deadweight_t")  or equasis_data.get("DWT")),
-            "year_of_build":   _safe_int(equasis_data.get("year_of_build")   or equasis_data.get("Year of build")),
-            "equasis_owner":   equasis_data.get("equasis_owner"),
-            "equasis_address": equasis_data.get("equasis_address"),
-            "pi_club":         equasis_data.get("pi_club"),
-            "class_society":   equasis_data.get("class_society"),
-        }
+def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str, Any]]:
+    """POST /vessel-at-port using shared session + CSRF token."""
+    url = port_url.rstrip("/") + "/vessel-at-port"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/json",
+        "Origin": "https://magicport.ai",
+        "Referer": port_url.rstrip("/") + "/",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRF-Token": csrf_token,
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+    for attempt in range(3):
+        try:
+            r = session.post(url, headers=headers, json={}, timeout=30)
+            r.raise_for_status()
+            data = r.json()
 
-    rot = rotterdam_data or {}
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                for key in ("data", "vessels", "results", "items", "ships", "vessel"):
+                    if key in data and isinstance(data[key], list):
+                        return data[key]
+                if "imo" in data:
+                    return [data]
+            return []
+        except Exception as e:
+            log("WARNING", f"{url} error (attempt {attempt + 1}/3): {e}")
+        if attempt < 2:
+            time.sleep(5 * (attempt + 1))
+    return []
 
-    row = {"imo": str(imo), "equasis_updated": datetime.now(timezone.utc).isoformat()}
 
-    for field in EQUASIS_FIELDS:
-        existing_value = (existing_row or {}).get(field)
-        eq_value = eq.get(field)
-        rot_value = rot.get(field)
-
-        if existing_value:
-            # Keep existing — never overwrite
-            row[field] = existing_value
-        elif eq_value is not None:
-            # Fill from Equasis
-            row[field] = eq_value
-        elif rot_value is not None:
-            # Fill from Rotterdam
-            row[field] = rot_value
-        # else: both null — omit to avoid overwriting with null
-
-    return row
-
-def supabase_upsert(row: dict):
-    """Upsert a row into static_vessel_cache."""
+def get_existing_imos() -> Set[str]:
+    """Fetch all existing IMOs from static_vessel_cache (paginated)."""
     if not SUPABASE_URL or not SUPABASE_KEY:
-        log("WARNING", "Supabase credentials missing — skipping upsert")
+        log("WARNING", "Cannot fetch existing IMOs — credentials missing")
+        return set()
+
+    existing: Set[str] = set()
+    offset = 0
+    limit = 1000
+    import requests
+
+    while True:
+        try:
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/static_vessel_cache?select=imo",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Range": f"{offset}-{offset + limit - 1}",
+                },
+                timeout=30,
+            )
+            if not r.ok:
+                log("WARNING", f"Fetch existing IMOs failed: HTTP {r.status_code}")
+                break
+            rows = r.json()
+            if not rows:
+                break
+            for row in rows:
+                if row.get("imo"):
+                    existing.add(str(row["imo"]))
+            if len(rows) < limit:
+                break
+            offset += limit
+        except Exception as e:
+            log("WARNING", f"Error fetching existing IMOs: {e}")
+            break
+
+    log("INFO", f"Found {len(existing)} existing IMOs in cache (will skip)")
+    return existing
+
+
+def upsert_vessel(row: dict) -> bool:
+    """Upsert a single row into static_vessel_cache."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log("ERROR", "Supabase credentials missing — skipping upsert")
         return False
     try:
+        import requests
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/static_vessel_cache",
             json=row,
@@ -311,154 +263,16 @@ def supabase_upsert(row: dict):
                 "Content-Type": "application/json",
                 "Prefer": "resolution=merge-duplicates,return=minimal",
             },
-            timeout=10,
+            timeout=15,
         )
         if r.status_code in (200, 201, 204):
             return True
-        log("WARNING", f"Supabase upsert {row['imo']} → {r.status_code}: {r.text[:200]}")
+        log("WARNING", f"Upsert IMO {row.get('imo')} → HTTP {r.status_code}: {r.text[:200]}")
         return False
     except Exception as e:
-        log("WARNING", f"Supabase upsert error for IMO {row['imo']}: {e}")
+        log("WARNING", f"Upsert error IMO {row.get('imo')}: {e}")
         return False
 
-
-def supabase_get_owner_row(imo: str) -> Optional[dict]:
-    """Fetch current vessel_owners row for this IMO."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return None
-    try:
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/vessel_owners"
-            f"?imo=eq.{imo}&select=imo,name,address,phone,email,equasis_source",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-            },
-            timeout=10,
-        )
-        if r.ok:
-            rows = r.json()
-            return rows[0] if rows else None
-    except Exception as e:
-        log("WARNING", f"vessel_owners fetch error for IMO {imo}: {e}")
-    return None
-
-
-def upsert_vessel_owner(imo: str, equasis_data: dict):
-    """
-    Upsert into vessel_owners using Equasis data.
-
-    Merge rules:
-      - New record  → insert everything from Equasis
-      - equasis_source = true (auto record)  → update all equasis fields freely
-      - equasis_source = false (user record) → only fill null fields,
-        NEVER touch name / address / phone / email
-    """
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return
-
-    owner_name    = equasis_data.get("equasis_owner")
-    owner_address = equasis_data.get("equasis_address")
-    pi_club       = equasis_data.get("pi_club")
-
-    # Nothing useful to write
-    if not owner_name:
-        return
-
-    existing = supabase_get_owner_row(imo)
-    now = datetime.now(timezone.utc).isoformat()
-
-    if existing is None:
-        # Brand new — insert full Equasis record
-        row = {
-            "imo":             str(imo),
-            "name":            owner_name,
-            "address":         owner_address,
-            "equasis_address": owner_address,
-            "pi_club":         pi_club,
-            "equasis_source":  True,
-            "updated_by":      "equasis",
-            "updated_at":      now,
-        }
-        # Remove nulls
-        row = {k: v for k, v in row.items() if v is not None}
-
-    elif existing.get("equasis_source") is True:
-        # Auto record — update equasis fields freely
-        row = {
-            "imo":             str(imo),
-            "name":            owner_name,
-            "address":         owner_address,
-            "equasis_address": owner_address,
-            "pi_club":         pi_club,
-            "equasis_source":  True,
-            "updated_by":      "equasis",
-            "updated_at":      now,
-        }
-        row = {k: v for k, v in row.items() if v is not None}
-
-    else:
-        # User-owned record (equasis_source = false)
-        # Only fill genuine nulls — never touch name/address/phone/email
-        row = {"imo": str(imo), "updated_at": now}
-        if not existing.get("equasis_address") and owner_address:
-            row["equasis_address"] = owner_address
-        if not existing.get("pi_club") and pi_club:
-            row["pi_club"] = pi_club
-        # name / address / phone / email → never touched
-        if len(row) == 2:
-            # Nothing to update
-            return
-
-    try:
-        r = requests.post(
-            f"{SUPABASE_URL}/rest/v1/vessel_owners",
-            json=row,
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
-            },
-            timeout=10,
-        )
-        if r.status_code not in (200, 201, 204):
-            log("WARNING", f"vessel_owners upsert {imo} → {r.status_code}: {r.text[:200]}")
-    except Exception as e:
-        log("WARNING", f"vessel_owners upsert error for IMO {imo}: {e}")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# EQUASIS — fetch via Oracle API
-# ══════════════════════════════════════════════════════════════════════════════
-
-def fetch_equasis(imo: str) -> Optional[dict]:
-    """Call Oracle API /equasis/{imo}."""
-    if not RENDER_BASE or not API_SECRET:
-        log("ERROR", "RENDER_BASE or API_SECRET not configured")
-        return None
-    try:
-        r = requests.get(
-            f"{RENDER_BASE}/equasis/{imo}",
-            headers={"X-API-Secret": API_SECRET},
-            timeout=30,
-        )
-        if r.status_code == 404:
-            log("INFO", f"IMO {imo}: not found on Equasis")
-            return None
-        if not r.ok:
-            log("WARNING", f"IMO {imo}: HTTP {r.status_code}")
-            return None
-        data = r.json()
-        if data.get("found") is False:
-            log("INFO", f"IMO {imo}: Equasis returned found=false")
-            return None
-        return data
-    except requests.exceptions.Timeout:
-        log("WARNING", f"IMO {imo}: Equasis request timed out")
-        return None
-    except Exception as e:
-        log("WARNING", f"IMO {imo}: Equasis fetch error — {e}")
-        return None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
@@ -466,127 +280,141 @@ def fetch_equasis(imo: str) -> Optional[dict]:
 
 def main():
     print("=" * 60)
-    print("  EQUASIS ENRICHER — Daily Cache Builder")
+    print("  MAGICPORT ENRICHER — Vessel-at-Port Cache Builder")
     print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 60)
 
-    # 1. Fetch ANP vessels
-    try:
-        all_vessels_anp = fetch_anp_vessels()
-    except RuntimeError as e:
-        log("CRITICAL", str(e))
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log("CRITICAL", "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
         sys.exit(1)
 
-    # 2. Fetch Rotterdam vessels
+    # Import curl_cffi (bypasses Cloudflare TLS fingerprinting)
     try:
-        rotterdam_raw = fetch_rotterdam_vessels()
-    except RuntimeError as e:
-        log("WARNING", str(e))
-        rotterdam_raw = []
+        from curl_cffi import requests as curl_requests
+        log("INFO", "Using curl_cffi (Chrome impersonation)")
+    except ImportError:
+        log("CRITICAL", "curl_cffi is required. Install: pip install curl_cffi")
+        sys.exit(1)
 
-    # Normalise Rotterdam data and index by IMO
-    rotterdam_by_imo = {}
-    for v in rotterdam_raw:
-        imo = _safe_str(v.get("imo"))
-        if imo and _is_valid_imo(imo):
-            rotterdam_by_imo[imo] = normalize_rotterdam(v)
+    # Read ports file
+    if not os.path.exists(PORTS_FILE):
+        alt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
+        if os.path.exists(alt):
+            ports_path = alt
         else:
-            log("DEBUG", f"Skipping invalid Rotterdam IMO: '{imo}'")
+            log("CRITICAL", f"Ports file not found: {PORTS_FILE}")
+            sys.exit(1)
+    else:
+        ports_path = PORTS_FILE
 
-    # 3. Extract valid IMOs from both sources
-    imos_anp = extract_imos(all_vessels_anp)
-    imos_rot = list(rotterdam_by_imo.keys())
-    # Merge while preserving order and removing duplicates
-    seen = set()
-    all_imos = []
-    for imo in imos_anp + imos_rot:
-        if imo not in seen:
-            seen.add(imo)
-            all_imos.append(imo)
+    with open(ports_path, "r", encoding="utf-8") as f:
+        ports = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
-    if not all_imos:
-        log("INFO", "No valid IMOs found from any source — nothing to do")
-        return
+    log("INFO", f"Loaded {len(ports)} ports from {ports_path}")
 
-    # 4. Load current Supabase cache for these IMOs
-    cache = supabase_get_cache(all_imos)
+    # Load existing IMOs once (skip duplicates)
+    existing_imos: Set[str] = set()
+    if SKIP_EXISTING:
+        existing_imos = get_existing_imos()
 
-    # 5. Classify each IMO
-    to_fetch   = []   # not in cache at all
-    to_enrich  = []   # in cache but incomplete
-    skip_count = 0
+    # Create session with Chrome impersonation
+    session = curl_requests.Session(impersonate="chrome120")
 
-    for imo in all_imos:
-        row = cache.get(imo)
-        if row is None:
-            to_fetch.append((imo, None))
-        elif needs_enrichment(row):
-            gaps = [f for f in EQUASIS_FIELDS if not row.get(f)]
-            log("DEBUG", f"IMO {imo} ({row.get('name','?')}): gaps → {gaps}")
-            to_enrich.append((imo, row))
-        else:
-            skip_count += 1
+    # Step 1: Hit homepage once to obtain session cookies + CSRF token
+    log("INFO", "Fetching magicport.ai homepage to obtain session cookies...")
+    csrf_token = get_csrf_token(session)
+    if not csrf_token:
+        log("CRITICAL", "Failed to obtain CSRF token. Cloudflare may be blocking.")
+        sys.exit(1)
 
-    work = to_fetch + to_enrich
-    log("INFO", f"Summary: {len(to_fetch)} new | {len(to_enrich)} need enrichment | {skip_count} complete — skipped")
+    total_inserted = 0
+    total_failed = 0
+    total_skipped = 0
+    total_existing = 0
 
-    if not work:
-        log("INFO", "Nothing to fetch — all IMOs are up to date")
-        return
+    for idx, port_url in enumerate(ports, 1):
+        log("INFO", f"[{idx}/{len(ports)}] {port_url}")
+        vessels = fetch_port_vessels(port_url, session, csrf_token)
 
-    log("INFO", f"Starting enrichment of {len(work)} IMOs ({BATCH_SIZE}/min, no cap)")
-    print("-" * 60)
+        if not vessels:
+            log("INFO", "  → 0 vessels")
+            time.sleep(REQUEST_DELAY)
+            continue
 
-    done = 0
-    failed = 0
-    skipped_no_data = 0
+        log("INFO", f"  → {len(vessels)} vessel(s)")
+        new_in_port = 0
+        existing_in_port = 0
 
-    for batch_start in range(0, len(work), BATCH_SIZE):
-        batch = work[batch_start : batch_start + BATCH_SIZE]
-        batch_num = batch_start // BATCH_SIZE + 1
-        total_batches = (len(work) + BATCH_SIZE - 1) // BATCH_SIZE
-        log("INFO", f"Batch {batch_num}/{total_batches}: {[b[0] for b in batch]}")
+        for v in vessels:
+            imo_raw = v.get("imo")
+            if not imo_raw:
+                total_skipped += 1
+                continue
 
-        for imo, existing_row in batch:
-            eq_data = fetch_equasis(imo)
-            rot_data = rotterdam_by_imo.get(imo)
+            imo = str(imo_raw).strip()
+            if not re.match(r"^\d{7}$", imo):
+                log("DEBUG", f"  Skipping invalid IMO: {imo}")
+                total_skipped += 1
+                continue
 
-            if eq_data is None and rot_data is None:
-                skipped_no_data += 1
-                # Even if both sources have nothing, mark timestamp so we don't retry next run
-                # unless it's a completely new record we couldn't find
-                if existing_row is not None:
-                    supabase_upsert({
-                        "imo": str(imo),
-                        "equasis_updated": datetime.now(timezone.utc).isoformat(),
-                    })
+            # Skip if already in DB
+            if SKIP_EXISTING and imo in existing_imos:
+                existing_in_port += 1
+                total_existing += 1
+                continue
+
+            row: Dict[str, Any] = {"imo": imo}
+
+            name = v.get("name")
+            if name and str(name).strip():
+                row["name"] = str(name).strip()
+
+            ship_type = v.get("type")
+            if ship_type and str(ship_type).strip() and str(ship_type).strip() != "-":
+                row["ship_type"] = str(ship_type).strip()
+
+            flag_code = v.get("flag")
+            if flag_code and str(flag_code).strip() and str(flag_code).strip() != "-":
+                resolved = resolve_flag(str(flag_code))
+                if resolved:
+                    row["flag"] = resolved
+
+            dwt = v.get("dwt")
+            if dwt is not None and str(dwt).strip() and str(dwt).strip() != "-":
+                row["deadweight_t"] = str(dwt).strip()
+
+            length = v.get("length")
+            if length is not None and str(length).strip() and str(length).strip() != "-":
+                row["length_overall_m"] = str(length).strip()
+
+            mmsi = extract_mmsi(v.get("route"))
+            if mmsi:
+                row["mmsi"] = mmsi
+
+            row["cached_at"] = datetime.now(timezone.utc).isoformat()
+
+            if upsert_vessel(row):
+                total_inserted += 1
+                new_in_port += 1
+                # Add to in-memory set so we don't re-insert it later in the same run
+                existing_imos.add(imo)
             else:
-                row = build_upsert_row(imo, eq_data, existing_row, rot_data)
-                if supabase_upsert(row):
-                    if eq_data:
-                        upsert_vessel_owner(imo, eq_data)
-                    done += 1
-                    action = "inserted" if existing_row is None else "enriched"
-                    sources = []
-                    if eq_data: sources.append("Equasis")
-                    if rot_data: sources.append("Rotterdam")
-                    src_str = "+".join(sources) if sources else "—"
-                    owner = row.get("equasis_owner", "—")
-                    log("OK", f"IMO {imo} ({row.get('name','?')}) {action} | src: {src_str} | owner: {owner}")
-                else:
-                    failed += 1
+                total_failed += 1
 
-            # Small gap between requests within a batch
-            time.sleep(REQUEST_GAP)
+            if VESSEL_DELAY > 0:
+                time.sleep(VESSEL_DELAY)
 
-        # Wait between batches (skip after last)
-        if batch_start + BATCH_SIZE < len(work):
-            log("INFO", f"Waiting {BATCH_DELAY}s before next batch...")
-            time.sleep(BATCH_DELAY)
+        if existing_in_port > 0:
+            log("INFO", f"  → {new_in_port} new | {existing_in_port} already in DB")
+        else:
+            log("INFO", f"  → {new_in_port} new vessel(s) inserted")
+
+        time.sleep(REQUEST_DELAY)
 
     print("=" * 60)
-    log("DONE", f"Enriched: {done} | Not found: {skipped_no_data} | Errors: {failed}")
+    log("DONE", f"Inserted: {total_inserted} | Existing skipped: {total_existing} | Failed: {total_failed} | Invalid skipped: {total_skipped}")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     main()
