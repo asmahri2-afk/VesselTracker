@@ -1,14 +1,18 @@
 """
-magicport_enricher.py
+magicport_enricher.py  — OPTIMIZED VERSION
 ─────────────────────
-Scrape vessel-at-port data from magicport.ai for all ports listed
-in ports.txt and upsert into Supabase static_vessel_cache.
+Scrape vessel-at-port data from magicport.ai and upsert into Supabase.
 
-Uses curl_cffi to bypass Cloudflare + extracts Laravel CSRF token from homepage.
+OPTIMIZATIONS:
+  • Batch upserts (100 rows per request) instead of 1-by-1
+  • Persistent Supabase session with keep-alive
+  • Zero delay between vessel DB writes
+  • Pre-compiled regex
+  • Connection reuse for both MagicPort and Supabase
 
 Env:
     SUPABASE_URL
-    SUPABASE_SERVICE_KEY  (or SUPABASE_KEY)
+    SUPABASE_SERVICE_KEY
 
 Usage:
     python magicport_enricher.py
@@ -25,15 +29,19 @@ from typing import Optional, List, Dict, Any, Set
 # CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 
-PORTS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-REQUEST_DELAY = 2.5   # seconds between port requests
-VESSEL_DELAY  = 0.2   # seconds between individual vessel upserts
-SKIP_EXISTING = True  # skip vessels already in static_vessel_cache
+PORTS_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
+SUPABASE_URL  = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
+REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.0"))   # seconds between ports
+SKIP_EXISTING = True
+BATCH_SIZE    = 100   # Supabase bulk upsert batch size
+
+# Pre-compiled regex
+IMO_RE = re.compile(r"^\d{7}$")
+MMSI_RE = re.compile(r"mmsi-(\d+)")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ISO 3166-1 alpha-2 → full country name
+# FLAG MAP (truncated for brevity in display — full map preserved in output)
 # ══════════════════════════════════════════════════════════════════════════════
 
 FLAG_MAP = {
@@ -124,7 +132,7 @@ def resolve_flag(code: Optional[str]) -> Optional[str]:
 def extract_mmsi(route: Optional[str]) -> Optional[str]:
     if not route:
         return None
-    m = re.search(r"mmsi-(\d+)", str(route))
+    m = MMSI_RE.search(str(route))
     return m.group(1) if m else None
 
 
@@ -145,13 +153,10 @@ def get_csrf_token(session) -> Optional[str]:
         r.raise_for_status()
         html = r.text
 
-        # Pattern 1: <meta name="csrf-token" content="...">
         m = re.search(r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
         if not m:
-            # Pattern 2: <meta content="..." name="csrf-token">
             m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\']', html, re.IGNORECASE)
         if not m:
-            # Pattern 3: JSON embedded in page
             m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
         if m:
             token = m.group(1)
@@ -205,7 +210,7 @@ def fetch_port_vessels(port_url: str, session, csrf_token: str) -> List[Dict[str
     return []
 
 
-def get_existing_imos() -> Set[str]:
+def get_existing_imos(supa_session) -> Set[str]:
     """Fetch all existing IMOs from static_vessel_cache (paginated)."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         log("WARNING", "Cannot fetch existing IMOs — credentials missing")
@@ -214,11 +219,10 @@ def get_existing_imos() -> Set[str]:
     existing: Set[str] = set()
     offset = 0
     limit = 1000
-    import requests
 
     while True:
         try:
-            r = requests.get(
+            r = supa_session.get(
                 f"{SUPABASE_URL}/rest/v1/static_vessel_cache?select=imo",
                 headers={
                     "apikey": SUPABASE_KEY,
@@ -247,31 +251,51 @@ def get_existing_imos() -> Set[str]:
     return existing
 
 
-def upsert_vessel(row: dict) -> bool:
-    """Upsert a single row into static_vessel_cache."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        log("ERROR", "Supabase credentials missing — skipping upsert")
-        return False
+def flush_batch(supa_session, batch: List[dict]) -> tuple:
+    """Bulk upsert a batch of rows. Returns (success_count, fail_count)."""
+    if not batch:
+        return 0, 0
     try:
-        import requests
-        r = requests.post(
+        r = supa_session.post(
             f"{SUPABASE_URL}/rest/v1/static_vessel_cache",
-            json=row,
+            json=batch,
             headers={
                 "apikey": SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
                 "Content-Type": "application/json",
                 "Prefer": "resolution=merge-duplicates,return=minimal",
             },
-            timeout=15,
+            timeout=30,
         )
         if r.status_code in (200, 201, 204):
-            return True
-        log("WARNING", f"Upsert IMO {row.get('imo')} → HTTP {r.status_code}: {r.text[:200]}")
-        return False
+            return len(batch), 0
+        log("WARNING", f"Batch upsert failed HTTP {r.status_code}: {r.text[:200]}")
+        # Fallback: individual inserts
+        ok = 0
+        fail = 0
+        for row in batch:
+            try:
+                rr = supa_session.post(
+                    f"{SUPABASE_URL}/rest/v1/static_vessel_cache",
+                    json=row,
+                    headers={
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_KEY}",
+                        "Content-Type": "application/json",
+                        "Prefer": "resolution=merge-duplicates,return=minimal",
+                    },
+                    timeout=15,
+                )
+                if rr.status_code in (200, 201, 204):
+                    ok += 1
+                else:
+                    fail += 1
+            except Exception:
+                fail += 1
+        return ok, fail
     except Exception as e:
-        log("WARNING", f"Upsert error IMO {row.get('imo')}: {e}")
-        return False
+        log("WARNING", f"Batch upsert error: {e}")
+        return 0, len(batch)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -288,12 +312,12 @@ def main():
         log("CRITICAL", "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
         sys.exit(1)
 
-    # Import curl_cffi (bypasses Cloudflare TLS fingerprinting)
     try:
         from curl_cffi import requests as curl_requests
+        import requests
         log("INFO", "Using curl_cffi (Chrome impersonation)")
-    except ImportError:
-        log("CRITICAL", "curl_cffi is required. Install: pip install curl_cffi")
+    except ImportError as e:
+        log("CRITICAL", f"Missing dependency: {e}. Install: pip install curl_cffi requests")
         sys.exit(1)
 
     # Read ports file
@@ -312,15 +336,22 @@ def main():
 
     log("INFO", f"Loaded {len(ports)} ports from {ports_path}")
 
-    # Load existing IMOs once (skip duplicates)
+    # Persistent Supabase session (keep-alive, connection reuse)
+    supa_session = requests.Session()
+    supa_session.headers.update({
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    })
+
+    # Load existing IMOs once
     existing_imos: Set[str] = set()
     if SKIP_EXISTING:
-        existing_imos = get_existing_imos()
+        existing_imos = get_existing_imos(supa_session)
 
-    # Create session with Chrome impersonation
+    # Create curl_cffi session for MagicPort
     session = curl_requests.Session(impersonate="chrome120")
 
-    # Step 1: Hit homepage once to obtain session cookies + CSRF token
+    # Obtain CSRF token
     log("INFO", "Fetching magicport.ai homepage to obtain session cookies...")
     csrf_token = get_csrf_token(session)
     if not csrf_token:
@@ -331,6 +362,7 @@ def main():
     total_failed = 0
     total_skipped = 0
     total_existing = 0
+    batch: List[dict] = []
 
     for idx, port_url in enumerate(ports, 1):
         log("INFO", f"[{idx}/{len(ports)}] {port_url}")
@@ -341,7 +373,6 @@ def main():
             time.sleep(REQUEST_DELAY)
             continue
 
-        log("INFO", f"  → {len(vessels)} vessel(s)")
         new_in_port = 0
         existing_in_port = 0
 
@@ -352,8 +383,7 @@ def main():
                 continue
 
             imo = str(imo_raw).strip()
-            if not re.match(r"^\d{7}$", imo):
-                log("DEBUG", f"  Skipping invalid IMO: {imo}")
+            if not IMO_RE.match(imo):
                 total_skipped += 1
                 continue
 
@@ -393,23 +423,32 @@ def main():
 
             row["cached_at"] = datetime.now(timezone.utc).isoformat()
 
-            if upsert_vessel(row):
-                total_inserted += 1
-                new_in_port += 1
-                # Add to in-memory set so we don't re-insert it later in the same run
-                existing_imos.add(imo)
-            else:
-                total_failed += 1
+            batch.append(row)
+            new_in_port += 1
+            existing_imos.add(imo)
 
-            if VESSEL_DELAY > 0:
-                time.sleep(VESSEL_DELAY)
+            # Flush batch when full
+            if len(batch) >= BATCH_SIZE:
+                ok, fail = flush_batch(supa_session, batch)
+                total_inserted += ok
+                total_failed += fail
+                batch = []
 
+        # Report per port
         if existing_in_port > 0:
             log("INFO", f"  → {new_in_port} new | {existing_in_port} already in DB")
+        elif new_in_port > 0:
+            log("INFO", f"  → {new_in_port} new vessel(s)")
         else:
-            log("INFO", f"  → {new_in_port} new vessel(s) inserted")
+            log("INFO", "  → 0 vessels")
 
         time.sleep(REQUEST_DELAY)
+
+    # Flush remaining batch
+    if batch:
+        ok, fail = flush_batch(supa_session, batch)
+        total_inserted += ok
+        total_failed += fail
 
     print("=" * 60)
     log("DONE", f"Inserted: {total_inserted} | Existing skipped: {total_existing} | Failed: {total_failed} | Invalid skipped: {total_skipped}")
