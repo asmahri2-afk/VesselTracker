@@ -4,7 +4,7 @@ magicport_enricher.py  — OPTIMIZED VERSION
 Scrape vessel-at-port data from magicport.ai and upsert into Supabase.
 
 OPTIMIZATIONS:
-  • Batch upserts (100 rows per request) instead of 1-by-1
+  • Batch upserts (100 rows per request) with normalized keys
   • Persistent Supabase session with keep-alive
   • Zero delay between vessel DB writes
   • Pre-compiled regex
@@ -35,13 +35,14 @@ SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY
 REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.0"))   # seconds between ports
 SKIP_EXISTING = True
 BATCH_SIZE    = 100   # Supabase bulk upsert batch size
+SHUFFLE_PORTS = True  # shuffle port order each run (avoids predictable patterns)
 
 # Pre-compiled regex
 IMO_RE = re.compile(r"^\d{7}$")
 MMSI_RE = re.compile(r"mmsi-(\d+)")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FLAG MAP (truncated for brevity in display — full map preserved in output)
+# FLAG MAP
 # ══════════════════════════════════════════════════════════════════════════════
 
 FLAG_MAP = {
@@ -251,10 +252,30 @@ def get_existing_imos(supa_session) -> Set[str]:
     return existing
 
 
+def normalize_batch(batch: List[dict]) -> List[dict]:
+    """Ensure all rows in batch have the same keys (required by Supabase)."""
+    if not batch:
+        return []
+    all_keys = set()
+    for row in batch:
+        all_keys.update(row.keys())
+    normalized = []
+    for row in batch:
+        new_row = dict(row)
+        for key in all_keys:
+            if key not in new_row:
+                new_row[key] = None
+        normalized.append(new_row)
+    return normalized
+
+
 def flush_batch(supa_session, batch: List[dict]) -> tuple:
     """Bulk upsert a batch of rows. Returns (success_count, fail_count)."""
     if not batch:
         return 0, 0
+
+    batch = normalize_batch(batch)
+
     try:
         r = supa_session.post(
             f"{SUPABASE_URL}/rest/v1/static_vessel_cache",
@@ -335,6 +356,10 @@ def main():
         ports = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     log("INFO", f"Loaded {len(ports)} ports from {ports_path}")
+
+    if SHUFFLE_PORTS:
+        random.shuffle(ports)
+        log("INFO", "Port order shuffled randomly")
 
     # Persistent Supabase session (keep-alive, connection reuse)
     supa_session = requests.Session()
@@ -435,10 +460,12 @@ def main():
                 batch = []
 
         # Report per port
-        if existing_in_port > 0:
+        if existing_in_port > 0 and new_in_port > 0:
             log("INFO", f"  → {new_in_port} new | {existing_in_port} already in DB")
         elif new_in_port > 0:
             log("INFO", f"  → {new_in_port} new vessel(s)")
+        elif existing_in_port > 0:
+            log("INFO", f"  → 0 new | {existing_in_port} already in DB")
         else:
             log("INFO", "  → 0 vessels")
 
