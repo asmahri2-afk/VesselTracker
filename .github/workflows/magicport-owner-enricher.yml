@@ -1,9 +1,9 @@
 name: MagicPort Owner Enricher
 
 on:
-  schedule:
-    # Daily at 03:00 UTC — 1h after vessel-at-port enricher
-    - cron: '0 3 * * *'
+  # schedule:
+  #   # Daily at 03:00 UTC — 1h after vessel-at-port enricher
+  #   - cron: '0 3 * * *'
   workflow_dispatch:
 
 env:
