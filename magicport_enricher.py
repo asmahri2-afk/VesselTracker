@@ -28,8 +28,8 @@ from typing import Optional, List, Dict, Any, Set
 PORTS_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ports.txt")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-REQUEST_DELAY = 1.0   # seconds between port requests
-VESSEL_DELAY  = 0.1   # seconds between individual vessel upserts
+REQUEST_DELAY = 2.5   # seconds between port requests
+VESSEL_DELAY  = 0.2   # seconds between individual vessel upserts
 SKIP_EXISTING = True  # skip vessels already in static_vessel_cache
 
 # ══════════════════════════════════════════════════════════════════════════════
