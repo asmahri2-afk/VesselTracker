@@ -57,11 +57,11 @@ def jitter_delay():
 
 def extract_csrf_from_html(html: str) -> Optional[str]:
     """Extract Laravel CSRF token from HTML meta tag."""
-    m = re.search(r''<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']'', html, re.IGNORECASE)
+    m = re.search(r'<meta[^>]+name=["\']csrf-token["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
     if not m:
-        m = re.search(r''<meta[^>]+content=["']([^"']+)["'][^>]+name=["']csrf-token["']'', html, re.IGNORECASE)
+        m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']csrf-token["\']', html, re.IGNORECASE)
     if not m:
-        m = re.search(r''"csrfToken"\s*:\s*"([^"]+)"'', html)
+        m = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
     return m.group(1) if m else None
 
 
@@ -397,7 +397,7 @@ def main():
 
         # Determine referer from any link in the page, or construct it
         referer = f"https://magicport.ai/vessels/{imo}"
-        m = re.search(r'''href=["'](https://magicport\.ai/vessels/[^"']+)["']'', vessel_html)
+        m = re.search(r'href=["\'](https://magicport\.ai/vessels/[^"\']+)["\']', vessel_html)
         if m:
             referer = m.group(1)
 
