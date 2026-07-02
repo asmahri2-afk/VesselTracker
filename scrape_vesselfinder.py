@@ -477,7 +477,12 @@ def build_alert_and_state(
     sog       = v.get("sog", 0.0)
     cog       = v.get("cog")
     last      = v.get("last_pos_utc")
-    dest      = v.get("destination", "")
+    dest      = (v.get("destination") or "").strip()
+    # VF markup breaks periodically → empty destination from the API. Keep
+    # the last known value instead of blanking the DB and firing a false
+    # "Destination changed: X ➜ N/A" alert.
+    if not dest and prev:
+        dest = (prev.get("destination") or "").strip()
 
     cog_str = f"{cog:.0f}°" if cog is not None else "N/A"
 
