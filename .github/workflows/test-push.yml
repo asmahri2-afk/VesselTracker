@@ -1,0 +1,33 @@
+name: Test Push
+
+# Manual trigger only — run from the Actions tab ("Run workflow").
+# Optionally pass a real user UUID to deliver an actual test push.
+on:
+  workflow_dispatch:
+    inputs:
+      test_user_id:
+        description: "Real user UUID to deliver a test push to (optional — leave blank for auth-only check)"
+        required: false
+        default: ""
+
+jobs:
+  test-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run push tester
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          API_SECRET: ${{ secrets.API_SECRET }}
+          TEST_USER_ID: ${{ github.event.inputs.test_user_id }}
+        run: python test_push.py
